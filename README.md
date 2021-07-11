@@ -4,30 +4,35 @@ spark-radiant is Apache Spark Performance Optimizer Project.
 
 ### Providing Spark as a Service with your own Fork of Spark
 
-One of the main problem for providing the Spark as a Service is to maintain your own code base with the frequent changes in the Open Source
-Spark. New version of Apache Spark will release in every six months.So Inorder to bring the newer version of Spark, it will take a lot
-of time and changes in the codebase to merge your changes into the Spark Branch.
+One of the major challenges in providing Spark as a Service is to effectively maintain own code base, while also keeping up with the many and frequent changes in the Open Source Spark.
+Apache Spark releases its new version in every six months. In order to further build upon this new version 
+of Spark, one needs to merge changes to the Spark branch, work on the codebase and resolve conflicts. 
+This entire process requires a lot of efforts, and is also Time consuming.
 
-### Why don't the organization merge all the Code in the Open Source Spark instead of having their own fork of Spark ?
+### Why do organizations prefer maintaining their own fork of Spark?
 
 Below are the few scenarios for maintaining own fork
-1) There are certain features that are applicable to use case of the organization only.
-2) Open Source Community has not accepted the change for any reason, But the change works for your Customers.
+1) There are certain features that are only applicable to the use case of the organization.
+2) The feature request is important for majority of the customers, and open source community does not accept feature requests.
 3) Last but most important, the organization does not want to open source the change for the competitive reason.
 
 ### What if ?
 
-1) We have the liberty of moving the with pace of changes in Apache Spark master.
-2) We can release Spark on the same day the new version of Apache Spark Released.
-3) We have our owm Spark Optimizer Project and integrate with the Runtime Spark.
-4) Maintain our own Project and update that project as per the new changes in Spark.
-5) Even we don't have to modify our project in some new release with Apache Spark
+1) we had the liberty to keep up with the pace of changes in Apache Spark Master.
+2) we can release Spark the same day the new version of Apache Spark releases.
+3) we have our own Spark Optimizer Project that can be integrated with the Runtime Spark.
+4) we can maintain our own project and update as per the new changes in Spark.
+5) what if we need not modify our project with any new release by Apache Spark
 
 ### Turning what if into reality !
 
-spark-radiant is Apache Spark Performance Optimizer Project.The main idea is to build some optimization features on top of Apache Spark
-to improve the performance optimization and reduce total cost optimization. This project will have some optimization related to
-catalyst optimizer rules, Enhanced AutoScaling in Spark, Collecting Important Metrics related to spark job, BloomFilter Index in Spark etc.
+Spark-Radiant is Apache Spark Performance and Cost Optimizer. The product, Spark-Radiant will help optimize performance
+and cost considering catalyst optimizer rules, Enhanced Auto-Scaling in Spark, Collecting Important Metrics related to spark job,
+BloomFilter Index in Spark etc. 
+
+Maintaining Spark-Radiant is much easier than maintaining the Spark Fork. With minimal changes in the Spark Fork, and
+considerable optimizations achieved using Spark-Radiant, we can easily reduce the time needed to release Spark as soon
+as the new version of the same is released by Apache Spark.
 
 ## How to use Spark-Radiant
 
@@ -68,8 +73,8 @@ For Core Optimization (WIP)
 ### Prerequisite
 spark-radiant have the below prerequisites
 
-a) This is supported with spark-3.0.x and latter version of spark
-b) Supported scala version 2.12.x
+a) This is supported with spark-3.0.x and latter version of spark.   
+b) Supported scala version 2.12.x.
 
 ### Use spark-radiant at runtime
 This spark-radiant project has 2 modules, you can use those modules in your project
@@ -78,8 +83,9 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
    a) **Using Dynamic Filtering in Spark** - Please refer the docs for [Dynamic Filtering](docs/dynamicFilterInSpark.md).
 
-   b) **Add multiple value in the withColumn Api of Spark** - Till now you can make one withColumn call wrt to spark.
-   If multiple column need to add in the dataframe there is need to call this withColumn again and again.
+   b) **Add multiple value in the withColumn Api of Spark** - Till now you can add one by one columns
+   using withColumn call with respect to spark dataframe. If we need to multiple column in dataframe there
+   is need to call this withColumn again and again.
    For example
    `
    df.withColumn("newCol", lit("someval")).withColumn("newCol1", lit("someval1")).withColumn("newCol2", lit("someval2"))

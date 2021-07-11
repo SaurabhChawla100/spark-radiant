@@ -1,10 +1,10 @@
 # spark-radiant Dynamic Filtering
 
-Spark-Radiant Dynamic Filter works well for the Join which is of type star schema type, where one table is having the huge number of
-records compare to other tables. This Dynamic Filtering works on runtime by using the predicates from the smaller table and filter
-out the join columns from the smaller table used those predicates result on the bigger table and filter out the
-bigger table, resulting in the less expensive join. Since the number of records on the left side is reduced resulting in
-improving the performance of the Spark Sql Queries.
+Spark-Radiant Dynamic Filter works well for the Join which is a type of star schema, where one table consists of
+large number of records as compared to other tables. This Dynamic Filtering works on runtime by using the predicates
+from the smaller table and filter out the join columns from the smaller table used those predicates result
+on the bigger table and filter out the bigger table, resulting in the less expensive join. Since the number of 
+records on the left side is reduced resulting in improving the performance of the Spark Sql Queries.
 
 ````
 
@@ -50,6 +50,8 @@ The number of records involved in the join is reduced as the result of using the
 reduces the system resource requirements since the number of tasks spawned for the Join operation is reduced.
 This results in the completion of jobs with lower number of resources.
 
+## Regular Join
+
 ```
 val df = spark.sql("select * from table,table1,table2 where table._1=table1._1 and table._1=table2._1 
  and table1._3 <= 'value019' and table2._3 = 'value015'")
@@ -58,6 +60,9 @@ df.show
 
 ![Regular Join](Snapshots/NormalJoin.png)
 
+
+## DynamicFilter Join
+
 ```
 val df = spark.sql("select * from table,table1,table2 where table._1=table1._1 and table._1=table2._1 
  and table1._3 <= 'value019' and table2._3 = 'value015'")
@@ -65,6 +70,8 @@ df.show
 ```
 
 ![DynamicFilterOpt Join](Snapshots/DynamicFilterOpt.png)
+
+#### Dynamic filter join works 2X faster than the regular Spark Join for this query.
 
 ## How Dynamic Filtering works?
 1) Create the optimized DataFrame from the existing DataFrame
@@ -103,7 +110,7 @@ val df2 = df1.join(df2, Seq("joinCnd"), "inner")
 df2.show()
 ```
 
-Note - Will add few more optimization in future.
+Note - Will add few more optimization in near future.
 
 1) Push down the dynamic filter to the FileSourceScan / Datasource to read only the filter records, This will reduce
    the pressure on the Disk I/O.
