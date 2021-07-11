@@ -97,4 +97,31 @@ class SparkRadiantSqlApi extends Logging with Serializable {
         inputDf
     }
   }
+  /**
+   * This method provides the functionality to use withColumns of Apache
+   * Spark which is not exposed in the open source spark code. This will prevent
+   * from adding the extra project in the logical plan and prevents
+   * from the stackoverflow error.
+   * [SPARK-26224][SQL] issue of withColumn while using it multiple times
+   *
+   * @param columnNameValue - Map of column name and value
+   * @param baseDataFrame - Dataframe on which withColumn is applied
+   * @return - new dataframe with updated columns
+   */
+  def useWithColumnsOfSpark(columnNameValue: Map[String, Column],
+                            baseDataFrame: DataFrame): DataFrame = {
+    try {
+      val column = columnNameValue.unzip
+      // scalastyle:off
+      // using the reflection code to call the method withColumns
+      val dataSetClass = Class.forName("org.apache.spark.sql.Dataset")
+      val newConfigurationMethod =
+        dataSetClass.getMethod("withColumns", classOf[Seq[String]], classOf[Seq[Column]])
+      newConfigurationMethod.invoke(
+        baseDataFrame, column._1, column._2).asInstanceOf[DataFrame]
+    } catch {
+      case ex: Throwable =>
+        throw ex
+    }
+  }
 }

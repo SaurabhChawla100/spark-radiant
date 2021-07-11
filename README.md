@@ -78,7 +78,22 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
    a) **Using Dynamic Filtering in Spark** - Please refer the docs for [Dynamic Filtering](docs/dynamicFilterInSpark.md).
 
-   b) **Add multiple value in the withColumn Api of Spark** - This is WIP
+   b) **Add multiple value in the withColumn Api of Spark** - Till now you can make one withColumn call wrt to spark.
+   If multiple column need to add in the dataframe there is need to call this withColumn again and again.
+   For example
+   `
+   df.withColumn("newCol", lit("someval")).withColumn("newCol1", lit("someval1")).withColumn("newCol2", lit("someval2"))
+   `
+
+   This will add the projection in each call of withColumn, resulting in the exception (stackoverflow error).
+   [SPARK-26224][SQL] issue of withColumn while using it multiple times
+
+   We can add all the new col in one call in one single projection using the method useWithColumnsOfSpark
+
+        import com.spark.radiant.sql.api.SparkRadiantSqlApi
+        val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+        val withColMap = Map("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
+        val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
 
    c) **BloomFilter Index** - This is WIP
 
