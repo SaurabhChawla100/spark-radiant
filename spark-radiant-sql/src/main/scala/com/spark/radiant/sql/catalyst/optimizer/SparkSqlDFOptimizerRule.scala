@@ -19,12 +19,12 @@ package com.spark.radiant.sql.catalyst.optimizer
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
-  ConcatWs, EqualTo, Expression, Literal, Or}
+  ConcatWs, EqualTo, Expression, In, Literal, Or}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.functions.{col, concat_ws, lit, md5, udf}
+import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Column, DataFrame, Dataset, SparkSession}
 
@@ -104,7 +104,17 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
        "bloomFilterKey")() :: Nil)
       @transient def dfr1 = createDfFromLogicalPlan(spark,
        Project(rightExpr, child = rightPlan.clone())) */
-      val dfr = createBloomFilterKeyColumn(dfRight, rightFilter.toList, bloomFilterKeyAppend )
+
+      val thresholdPushDownLength = spark.sparkContext.getConf.getInt(
+        "spark.sql.dynamicFilter.pushdown.threshold", 5000)
+      val dfr = createBloomFilterKeyColumn(dfRight, rightFilter.toList, bloomFilterKeyAppend)
+      val rightFilterKey = rightFilter.head.asInstanceOf[AttributeReference]
+      val bloomFilterDfr = dfr.select(rightFilterKey.name).limit(thresholdPushDownLength+1).collect()
+      val pushDownFileScanValues = if (bloomFilterDfr.length <= thresholdPushDownLength) {
+        bloomFilterDfr.map(x => Literal(x.get(0)))
+      } else {
+        null
+      }
       val bloomFilter = dfr.stat.bloomFilter(bloomFilterKeyAppend, bloomFilterCount, fpp)
       val broadcastValue = spark.sparkContext.broadcast(bloomFilter)
 
@@ -117,8 +127,15 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       val newPlan = Filter(MightContainInBloomFilter(expre,
        broadcastValue.value),Project(leftPlanExpr, logicalRelation))
       dfl = createDfFromLogicalPlan(spark, newPlan) */
-      var dfl = createDfFromLogicalPlan(spark, leftPlan)
+
+      var dfl: DataFrame = createDfFromLogicalPlan(spark, leftPlan)
       dfl = createBloomFilterKeyColumn(dfl, leftFilter.toList, bloomFilterKeyAppend)
+      if (pushDownFileScanValues != null) {
+        var leftDynamicFilterPlan = dfl.queryExecution.optimizedPlan
+        leftDynamicFilterPlan =
+          Filter(In(leftFilter.head, pushDownFileScanValues), leftDynamicFilterPlan)
+        dfl = createDfFromLogicalPlan(spark, leftDynamicFilterPlan)
+      }
       val dfl1 = dfl.filter { x =>
         broadcastValue.value.mightContain(x.getAs(bloomFilterKeyAppend))
       }
@@ -229,7 +246,8 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       updatedPlan
     }
     catch {
-      case ex : Throwable => logDebug(s"exception while creating th DF: ${ex}")
+      case ex : Throwable =>
+        logDebug(s"exception while creating the addDynamicFiltersPlan: ${ex}")
         throw ex
     }
   }

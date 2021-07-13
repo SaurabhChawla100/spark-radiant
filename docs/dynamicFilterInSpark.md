@@ -50,6 +50,10 @@ The number of records involved in the join is reduced as the result of using the
 reduces the system resource requirements since the number of tasks spawned for the Join operation is reduced.
 This results in the completion of jobs with lower number of resources.
 
+**Improved Disk I/O :**
+Push down the dynamic filter to the FileSourceScan / Datasource to read only the filter records.
+This will reduce the pressure on the Disk I/O.
+
 ## Regular Join
 
 ```
@@ -71,7 +75,7 @@ df.show
 
 ![DynamicFilterOpt Join](Snapshots/DynamicFilterOpt.png)
 
-#### Dynamic filter join works 2X faster than the regular Spark Join for this query.
+#### Dynamic filter join works 8X faster than the regular Spark Join for this query.
 
 ## How Dynamic Filtering works?
 1) Create the optimized DataFrame from the existing DataFrame
@@ -85,6 +89,9 @@ df.show
 2) spark.sql.dynamicFilter.completion.threshold - This is the time to complete the dynamic filter optimization in spark.
    This is to prevent the scenario where the smaller table where predicates filtering is huge and not completed in threshold
    time. Its value is in seconds. The default value is 60.
+
+3) spark.sql.dynamicFilter.pushdown.threshold - This is the default value for pushdown of the dynamic filter to 
+   FileScan / DataSource scan. The default value is 5000
 
 ## Running Dynamic Filter in Spark
 Provide the jar spark-radiant-sql-1.0-SNAPSHOT.jar in the class path for the spark Application. For eg using --jars etc.
@@ -112,7 +119,5 @@ df2.show()
 
 Note - Will add few more optimization in near future.
 
-1) Push down the dynamic filter to the FileSourceScan / Datasource to read only the filter records, This will reduce
-   the pressure on the Disk I/O.
-2) Support the other type of joins, like left outer join, left semi join etc.
+* Support the other type of joins, like left outer join, left semi join etc.
    
