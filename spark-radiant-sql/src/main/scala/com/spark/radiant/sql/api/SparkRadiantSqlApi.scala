@@ -21,6 +21,7 @@ import com.spark.radiant.sql.catalyst.optimizer.SparkSqlDFOptimizerRule
 import com.spark.radiant.sql.utils.SparkSqlUtils
 
 import java.util.concurrent.TimeUnit
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
@@ -73,6 +74,10 @@ class SparkRadiantSqlApi extends Logging with Serializable {
       dfCollectThread.shutdown()
     }
     dfCollectThread.awaitTermination(dynamicFilterCompletionTime, TimeUnit.SECONDS)
+    dfCollectThread.shutdownNow()
+    // cancel all the spark jobs for computing Dynamic Filter, If it is
+    // not completed in spark.sql.dynamicFilter.completion.threshold time
+    spark.sparkContext.cancelAllJobs()
     updatedDfPlan
   }
 
