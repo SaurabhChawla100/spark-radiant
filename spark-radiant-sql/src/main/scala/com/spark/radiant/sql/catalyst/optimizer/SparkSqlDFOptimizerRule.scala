@@ -87,12 +87,15 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case Filter(_, LogicalRelation(_, output ,_, _)) => output.map(_.exprId)
       case _ => leftPlan.output.map(_.exprId)
     }
-
     joinAttr.foreach { attr =>
-      val p = attr._1.asInstanceOf[AttributeReference].exprId
-      if (exprOut.contains(p)) {
+      val exprId1 = attr._1.asInstanceOf[AttributeReference].exprId
+      val exprId2 = attr._2.asInstanceOf[AttributeReference].exprId
+      if (exprOut.contains(exprId1)) {
         leftFilter = leftFilter :+ attr._1
         rightFilter = rightFilter :+ attr._2
+      } else if (exprOut.contains(exprId2)) {
+        leftFilter = leftFilter :+ attr._2
+        rightFilter = rightFilter :+ attr._1
       }
     }
     if (rightFilter.nonEmpty && rightFilter.length == leftFilter.length) {
@@ -152,34 +155,49 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
      bloomFilterCount: Long,
      joinAttr: List[(Expression, Expression)]): LogicalPlan = {
 
+    var updatedJoinAttr: List[(Expression, Expression)] = List.empty
+
+    val exprOut = leftPlan match {
+      case _ => leftPlan.output.map(_.exprId)
+    }
+    joinAttr.foreach { attr =>
+      val exprId1 = attr._1.asInstanceOf[AttributeReference].exprId
+      val exprId2 = attr._2.asInstanceOf[AttributeReference].exprId
+      if (exprOut.contains(exprId1)) {
+        updatedJoinAttr = updatedJoinAttr :+ (attr._1, attr._2)
+      } else if (exprOut.contains(exprId2)) {
+        updatedJoinAttr = updatedJoinAttr :+ (attr._2, attr._1)
+      }
+    }
+
+    val bloomFilterKeyAppender = s"${bloomFilterKey}${updatedJoinAttr.map(x => x._2).mkString("$$")}"
     val dfr = createDfFromLogicalPlan(spark, rightPlan)
     var hold = false
-    val bloomFilterKeyAppender = s"${bloomFilterKey}${joinAttr.map(x => x._2).mkString("$$")}"
     val updatedLeftPlan = leftPlan.transform {
       case typeFilter: TypedFilter =>
         val schemaStruct = typeFilter.schema
-        val b = typeFilter.output.map(_.exprId)
-        val u = joinAttr.filter {
-          attr => b.contains(attr._1.asInstanceOf[AttributeReference].exprId)
+        val typeFilterRef = typeFilter.output.map(_.exprId)
+        val checkAttr = updatedJoinAttr.filter {
+          attr => typeFilterRef.contains(attr._1.asInstanceOf[AttributeReference].exprId)
         }
         if (schemaStruct.fieldNames.contains(bloomFilterKeyAppender) &&
-          u.length!=0) {
+          checkAttr.nonEmpty) {
           // TODO add better logic for closing the recursion
           hold = true
         }
         typeFilter
       case filter @ Filter(_, LocalRelation(_, _, _)) if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
-          filter, rightOutput, bloomFilterCount, joinAttr)
+          filter, rightOutput, bloomFilterCount, updatedJoinAttr)
       case filter @ Filter(_, LogicalRelation(_, _, _, _))  if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender,dfr, filter,
-          rightOutput, bloomFilterCount, joinAttr)
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr, filter,
+          rightOutput, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender,dfr,
-          localTableScan, rightOutput, bloomFilterCount, joinAttr)
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+          localTableScan, rightOutput, bloomFilterCount, updatedJoinAttr)
       case logicalRelation: LogicalRelation if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender,dfr,
-          logicalRelation, rightOutput, bloomFilterCount, joinAttr)
+       getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+          logicalRelation, rightOutput, bloomFilterCount, updatedJoinAttr)
     }
     logDebug("optimized updatedLeftPlan::" + updatedLeftPlan)
     updatedLeftPlan
