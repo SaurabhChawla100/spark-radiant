@@ -69,7 +69,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
       Seq(DynamicFilterOptimizer)
    // create the parquet datasource file
     spark.createDataFrame(Seq((1, 1), (1, 2),
-      (2, 1), (2, 1), (2, 3), (3, 2), (3, 3))).toDF("test11", "test12").
+      (2, 1), (2, 1), (2, 3), (3, 2), (3, 3), (3, 4), (4, 1), (3, 5))).toDF("test11", "test12").
       repartition(1).write.mode("overwrite").
       format("parquet").save("src/test/resources/Testparquet1")
     spark.createDataFrame(Seq((1, 1, 4), (1, 2, 5),
@@ -166,6 +166,32 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     spark.read.parquet("src/test/resources/Testparquet1").createOrReplaceTempView("testDf1")
     spark.read.parquet("src/test/resources/Testparquet2").createOrReplaceTempView("testDf2")
 
+    val df = spark.sql("select * from testDf2 b join testDf1 a on" +
+      " a.test11=b.test21 where a.test12=2")
+    val dfOptimizer = new SparkSqlDFOptimizerRule()
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{ x => x.isInstanceOf[TypedFilter] }
+    assert(updateDFPlan.isDefined)
+    assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+    // test pushDown dynamic filter
+    val executedPlan = df.queryExecution.executedPlan
+    val leaves = executedPlan match {
+      case adaptive: AdaptiveSparkPlanExec => adaptive.executedPlan.collectLeaves()
+      case other => other.collectLeaves()
+    }
+    val fileScan = leaves.find(_.isInstanceOf[FileSourceScanExec])
+    if (fileScan.isDefined) {
+      val pushedFilter = fileScan.get.asInstanceOf[FileSourceScanExec].metadata.get("PushedFilters")
+      val expected = "Some([IsNotNull(test21), In(test21, [1,3])])"
+      assert(pushedFilter.toString ===  expected)
+    }
+  }
+
+  test("test the push down Dynamic filter is applied to bigger table") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+
+    spark.read.parquet("src/test/resources/Testparquet1").createOrReplaceTempView("testDf1")
+    spark.read.parquet("src/test/resources/Testparquet2").createOrReplaceTempView("testDf2")
+
     val df = spark.sql("select * from testDf1 a join testDf2 b on" +
       " a.test11=b.test21 where b.test22=2")
     val dfOptimizer = new SparkSqlDFOptimizerRule()
@@ -180,10 +206,14 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     }
     val fileScan = leaves.find(_.isInstanceOf[FileSourceScanExec])
     if (fileScan.isDefined) {
-      val pushedFilter = fileScan.get.asInstanceOf[FileSourceScanExec].metadata.get("PushedFilters")
-      val expected = "Some([IsNotNull(test11), In(test11, [1,3])])"
+      val fileSourceScanExec = fileScan.get.asInstanceOf[FileSourceScanExec]
+      val pushedFilter = fileSourceScanExec.metadata.get("PushedFilters")
+      val expected = "Some([IsNotNull(test22)," +
+        " EqualTo(test22,2), IsNotNull(test21), In(test21, [1,2,3,4])])"
       assert(pushedFilter.toString ===  expected)
+      val expectedDFOutput = "test21,test22,test23"
+      val dfAppliedSchema = fileSourceScanExec.schema.names.mkString(",")
+      assert(dfAppliedSchema ===  expectedDFOutput)
     }
   }
-
 }

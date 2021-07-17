@@ -229,9 +229,18 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           if (joinAttr.isEmpty) {
             join
           } else {
-            val ltPlan = getLeftOptimizedPlan(spark, join.left,
-              join.right, join.right.output, bloomFilterCount, joinAttr)
-            val updatedJoin = Join(ltPlan, join.right, Inner, join.condition, join.hint)
+              var ltPlan = join.left
+              var rtPlan = join.right
+             // Finding out the candidate where dynamic filter needs to be applied.
+            // This valid only for inner joins
+              if (join.joinType == Inner &&
+                join.left.stats.sizeInBytes < join.right.stats.sizeInBytes) {
+                rtPlan = join.left
+                ltPlan = join.right
+              }
+            ltPlan = getLeftOptimizedPlan(spark, ltPlan,
+              rtPlan, rtPlan.output, bloomFilterCount, joinAttr)
+            val updatedJoin = Join(ltPlan, rtPlan, join.joinType, join.condition, join.hint)
             logDebug(s"updatedJoin after applying DF :: ${updatedJoin}")
             updatedJoin
           }
