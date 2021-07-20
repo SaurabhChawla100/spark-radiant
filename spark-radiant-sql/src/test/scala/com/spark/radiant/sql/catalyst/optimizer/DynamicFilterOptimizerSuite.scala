@@ -188,6 +188,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
 
   test("test the push down Dynamic filter is applied to bigger table") {
     spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.sql("set spark.sql.dynamicfilter.comparejoinsides=true")
 
     spark.read.parquet("src/test/resources/Testparquet1").createOrReplaceTempView("testDf1")
     spark.read.parquet("src/test/resources/Testparquet2").createOrReplaceTempView("testDf2")

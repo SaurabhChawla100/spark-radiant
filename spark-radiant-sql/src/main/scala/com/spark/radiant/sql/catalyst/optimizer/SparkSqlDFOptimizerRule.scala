@@ -203,6 +203,24 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     updatedLeftPlan
   }
 
+  // Helper method to find when should we apply the size validation
+  // if the plan is directly on that table than compare size
+  private def sizeScanValidation(plan: LogicalPlan): Boolean = {
+    plan match {
+      case Project(_, Filter(_, LocalRelation(_, _, _)))
+           | Project(_, Filter(_, LogicalRelation(_, _, _, _))) => true
+      case Filter(_, LocalRelation(_, _, _)) | Filter(_, LogicalRelation(_, _, _, _)) => true
+      case LocalRelation(_, _, _) |  LogicalRelation(_, _, _, _) => true
+      case _ => false
+    }
+  }
+
+  private def compareJoinSides(spark: SparkSession):  Boolean = {
+    spark.conf.get("spark.sql.dynamicfilter.comparejoinsides",
+      spark.sparkContext.getConf.get("spark.sql.dynamicfilter.comparejoinsides",
+        "false")).toBoolean
+  }
+
   private def getOptimizedLogicalPlan(spark: SparkSession,
      plan: LogicalPlan,
      bloomFilterCount: Long): LogicalPlan = {
@@ -231,9 +249,10 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           } else {
               var ltPlan = join.left
               var rtPlan = join.right
-             // Finding out the candidate where dynamic filter needs to be applied.
-            // This valid only for inner joins
-              if (join.joinType == Inner &&
+              // Finding out the candidate where dynamic filter needs to be applied.
+              // This valid only for inner joins
+              if (join.joinType == Inner && compareJoinSides(spark) &&
+                sizeScanValidation(join.right) &&
                 join.left.stats.sizeInBytes < join.right.stats.sizeInBytes) {
                 rtPlan = join.left
                 ltPlan = join.right
