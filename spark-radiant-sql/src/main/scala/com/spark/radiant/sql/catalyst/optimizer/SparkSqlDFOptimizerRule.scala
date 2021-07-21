@@ -20,7 +20,7 @@ package com.spark.radiant.sql.catalyst.optimizer
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
   ConcatWs, EqualTo, Expression, In, Literal, Or}
-import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftSemi, RightOuter}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -221,12 +221,19 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
         "false")).toBoolean
   }
 
+  private def validJoinForDynamicFilter(joinType: JoinType): Boolean = {
+    joinType match {
+      case  Inner | LeftSemi | RightOuter => true
+      case _ => false
+    }
+  }
+
   private def getOptimizedLogicalPlan(spark: SparkSession,
      plan: LogicalPlan,
      bloomFilterCount: Long): LogicalPlan = {
     logDebug("Initial plan: "+ plan)
     val updatedPlan = plan.transform {
-      case join: Join if join.joinType == Inner =>
+      case join: Join if validJoinForDynamicFilter(join.joinType) =>
         var joinCondition: Option[Expression] = None
         joinCondition = join.condition
         val bhjThreshold: Long = spark.conf.get("spark.sql.autoBroadcastJoinThreshold")

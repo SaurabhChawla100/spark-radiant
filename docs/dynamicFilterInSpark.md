@@ -34,7 +34,7 @@ Scenario 1                                 |   Scenario 2
 
 ## Where Dynamic Filtering Works?
 
-1) This works with Inner Joins.
+1) This works with Inner Join, Right outer join, Left semi join.
 2) This works when there is no Broadcast Hash Join Strategy is used.
 3) This works for equi-join conditions.   
 4) This works when we get the filter records from the smaller table within the threshold limit for completion.
@@ -119,5 +119,5 @@ df2.show()
 
 Note - Will add few more optimization in near future.
 
-* Support the other type of joins, like left outer join, left semi join etc.
+* Support the other type of joins, like left outer join, right semi join etc.
    
