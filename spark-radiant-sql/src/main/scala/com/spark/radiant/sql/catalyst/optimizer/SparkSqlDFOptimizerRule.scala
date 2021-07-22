@@ -20,7 +20,8 @@ package com.spark.radiant.sql.catalyst.optimizer
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
   ConcatWs, EqualTo, Expression, In, Literal, Or}
-import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftSemi, RightOuter}
+import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftAnti, LeftOuter,
+  LeftSemi, RightOuter}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -71,34 +72,46 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     method.invoke(cls, spark, logicalPlan).asInstanceOf[Dataset[_]].toDF
   }
 
+  /**
+   *
+   * @param spark - existing spark Session
+   * @param bloomFilterAppendedKey - Column name for BloomFilter key in Dynamic Filter
+   * @param DataframeForGenDf - Data frame used for generating the values needed
+   *                          for Dynamic filter
+   * @param planForDf - Bigger table plan where the Dynamic Filter is added
+   * @param outputForGenDF - Output of smaller table for generating the Dynamic Filter
+   * @param bloomFilterCount - size of bloom filter
+   * @param joinAttr - Attributes present in the join condition
+   * @return - Return optimized logical plan having Dynamic Filter
+   */
   private def getPlanFromJoinCondition(spark: SparkSession,
-    bloomFilterKeyAppend: String,
-    dfRight: DataFrame,
-    leftPlan: LogicalPlan,
-    rightOutput: Seq[Attribute],
-    bloomFilterCount: Long,
-    joinAttr: List[(Expression, Expression)]): LogicalPlan = {
+     bloomFilterAppendedKey: String,
+     DataframeForGenDf: DataFrame,
+     planForDf: LogicalPlan,
+     outputForGenDF: Seq[Attribute],
+     bloomFilterCount: Long,
+     joinAttr: List[(Expression, Expression)]): LogicalPlan = {
 
-    var leftFilter: Seq[Expression] = Seq.empty
-    var rightFilter: Seq[Expression] = Seq.empty
+    var filterNeededForDF: Seq[Expression] = Seq.empty
+    var filterToCreateDF: Seq[Expression] = Seq.empty
 
-    val exprOut = leftPlan match {
+    val exprOut = planForDf match {
       case Filter(_, LocalRelation(output, _ ,_)) => output.map(_.exprId)
       case Filter(_, LogicalRelation(_, output ,_, _)) => output.map(_.exprId)
-      case _ => leftPlan.output.map(_.exprId)
+      case _ => planForDf.output.map(_.exprId)
     }
     joinAttr.foreach { attr =>
       val exprId1 = attr._1.asInstanceOf[AttributeReference].exprId
       val exprId2 = attr._2.asInstanceOf[AttributeReference].exprId
       if (exprOut.contains(exprId1)) {
-        leftFilter = leftFilter :+ attr._1
-        rightFilter = rightFilter :+ attr._2
+        filterNeededForDF = filterNeededForDF :+ attr._1
+        filterToCreateDF = filterToCreateDF :+ attr._2
       } else if (exprOut.contains(exprId2)) {
-        leftFilter = leftFilter :+ attr._2
-        rightFilter = rightFilter :+ attr._1
+        filterNeededForDF = filterNeededForDF :+ attr._2
+        filterToCreateDF = filterToCreateDF :+ attr._1
       }
     }
-    if (rightFilter.nonEmpty && rightFilter.length == leftFilter.length) {
+    if (filterToCreateDF.nonEmpty && filterToCreateDF.length == filterNeededForDF.length) {
 
       // TODO getting the task serialization exception on using Project,
       //  use better way instead of creating DF
@@ -110,15 +123,15 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
 
       val thresholdPushDownLength = spark.sparkContext.getConf.getInt(
         "spark.sql.dynamicFilter.pushdown.threshold", 5000)
-      val dfr = createBloomFilterKeyColumn(dfRight, rightFilter.toList, bloomFilterKeyAppend)
-      val rightFilterKey = rightFilter.head.asInstanceOf[AttributeReference]
+      val dfr = createBloomFilterKeyColumn(DataframeForGenDf, filterToCreateDF.toList, bloomFilterAppendedKey)
+      val rightFilterKey = filterToCreateDF.head.asInstanceOf[AttributeReference]
       val bloomFilterDfr = dfr.select(rightFilterKey.name).limit(thresholdPushDownLength+1).collect()
       val pushDownFileScanValues = if (bloomFilterDfr.length <= thresholdPushDownLength) {
         bloomFilterDfr.map(x => Literal(x.get(0)))
       } else {
         null
       }
-      val bloomFilter = dfr.stat.bloomFilter(bloomFilterKeyAppend, bloomFilterCount, fpp)
+      val bloomFilter = dfr.stat.bloomFilter(bloomFilterAppendedKey, bloomFilterCount, fpp)
       val broadcastValue = spark.sparkContext.broadcast(bloomFilter)
 
       // TODO getting the task serialization exception on using Project,
@@ -131,34 +144,46 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
        broadcastValue.value),Project(leftPlanExpr, logicalRelation))
       dfl = createDfFromLogicalPlan(spark, newPlan) */
 
-      var dfl: DataFrame = createDfFromLogicalPlan(spark, leftPlan)
-      dfl = createBloomFilterKeyColumn(dfl, leftFilter.toList, bloomFilterKeyAppend)
+      var dfl: DataFrame = createDfFromLogicalPlan(spark, planForDf)
+      dfl = createBloomFilterKeyColumn(dfl, filterNeededForDF.toList, bloomFilterAppendedKey)
       if (pushDownFileScanValues != null) {
         var leftDynamicFilterPlan = dfl.queryExecution.optimizedPlan
         leftDynamicFilterPlan =
-          Filter(In(leftFilter.head, pushDownFileScanValues), leftDynamicFilterPlan)
+          Filter(In(filterNeededForDF.head, pushDownFileScanValues), leftDynamicFilterPlan)
         dfl = createDfFromLogicalPlan(spark, leftDynamicFilterPlan)
       }
       val dfl1 = dfl.filter { x =>
-        broadcastValue.value.mightContain(x.getAs(bloomFilterKeyAppend))
+        broadcastValue.value.mightContain(x.getAs(bloomFilterAppendedKey))
       }
-      dfl1.drop(dfl1(bloomFilterKeyAppend)).queryExecution.optimizedPlan
+      dfl1.drop(dfl1(bloomFilterAppendedKey)).queryExecution.optimizedPlan
     } else {
-      leftPlan
+      planForDf
     }
   }
 
-  private def getLeftOptimizedPlan(spark: SparkSession,
-     leftPlan: LogicalPlan,
-     rightPlan: LogicalPlan,
-     rightOutput: Seq[Attribute],
+  /**
+   *
+   * @param spark - existing spark Session
+   * @param planForDF - Bigger table plan where the Dynamic Filter is needed
+   * @param predicatesPlanUsedInDF - smaller table which is used for creating
+   *                               Dynamic Filter
+   * @param predicateOutputInDF - Output of smaller table for generating the
+   *                            Dynamic Filter
+   * @param bloomFilterCount - size of bloom filter
+   * @param joinAttr - Attributes present in the join condition
+   * @return
+   */
+  private def getDynamicFilteredPlan(spark: SparkSession,
+     planForDF: LogicalPlan,
+     predicatesPlanUsedInDF: LogicalPlan,
+     predicateOutputInDF: Seq[Attribute],
      bloomFilterCount: Long,
      joinAttr: List[(Expression, Expression)]): LogicalPlan = {
 
     var updatedJoinAttr: List[(Expression, Expression)] = List.empty
 
-    val exprOut = leftPlan match {
-      case _ => leftPlan.output.map(_.exprId)
+    val exprOut = planForDF match {
+      case _ => planForDF.output.map(_.exprId)
     }
     joinAttr.foreach { attr =>
       val exprId1 = attr._1.asInstanceOf[AttributeReference].exprId
@@ -169,11 +194,10 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
         updatedJoinAttr = updatedJoinAttr :+ (attr._2, attr._1)
       }
     }
-
     val bloomFilterKeyAppender = s"${bloomFilterKey}${updatedJoinAttr.map(x => x._2).mkString("$$")}"
-    val dfr = createDfFromLogicalPlan(spark, rightPlan)
+    val dfr = createDfFromLogicalPlan(spark, predicatesPlanUsedInDF)
     var hold = false
-    val updatedLeftPlan = leftPlan.transform {
+    val updatedDynamicFilteredPlan = planForDF.transform {
       case typeFilter: TypedFilter =>
         val schemaStruct = typeFilter.schema
         val typeFilterRef = typeFilter.output.map(_.exprId)
@@ -188,19 +212,19 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
         typeFilter
       case filter @ Filter(_, LocalRelation(_, _, _)) if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
-          filter, rightOutput, bloomFilterCount, updatedJoinAttr)
+          filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case filter @ Filter(_, LogicalRelation(_, _, _, _))  if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr, filter,
-          rightOutput, bloomFilterCount, updatedJoinAttr)
+          predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
-          localTableScan, rightOutput, bloomFilterCount, updatedJoinAttr)
+          localTableScan, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case logicalRelation: LogicalRelation if !hold =>
        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
-          logicalRelation, rightOutput, bloomFilterCount, updatedJoinAttr)
+          logicalRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
     }
-    logDebug("optimized updatedLeftPlan::" + updatedLeftPlan)
-    updatedLeftPlan
+    logDebug(s"optimized DynamicFilteredPlan:: ${updatedDynamicFilteredPlan}")
+    updatedDynamicFilteredPlan
   }
 
   // Helper method to find when should we apply the size validation
@@ -223,7 +247,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
 
   private def validJoinForDynamicFilter(joinType: JoinType): Boolean = {
     joinType match {
-      case  Inner | LeftSemi | RightOuter => true
+      case  Inner | LeftSemi | RightOuter | LeftOuter | LeftAnti => true
       case _ => false
     }
   }
@@ -249,8 +273,14 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
             case EqualTo(_, _) => true
             case _ => false
           }
-          val joinAttr = joinKeys.map(x =>
+          var joinAttr = joinKeys.map(x =>
             (x.asInstanceOf[EqualTo].left,x.asInstanceOf[EqualTo].right)).toList
+          // filter out both left and right side attribute. This will remove
+          // the join condition which is of type comparison of one of the predicate of table
+          // and another one is string, int, double etc for eg a.value = 'testDF', this
+          // is not needed for Dynamic filter
+          joinAttr = joinAttr.filter( x =>
+            x._1.isInstanceOf[AttributeReference] && x._2.isInstanceOf[AttributeReference])
           if (joinAttr.isEmpty) {
             join
           } else {
@@ -264,8 +294,13 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
                 rtPlan = join.left
                 ltPlan = join.right
               }
-            ltPlan = getLeftOptimizedPlan(spark, ltPlan,
-              rtPlan, rtPlan.output, bloomFilterCount, joinAttr)
+            if (join.joinType == LeftOuter || join.joinType == LeftAnti) {
+              rtPlan = getDynamicFilteredPlan(spark, rtPlan,
+                ltPlan, ltPlan.output, bloomFilterCount, joinAttr)
+            } else {
+              ltPlan = getDynamicFilteredPlan(spark, ltPlan,
+                rtPlan, rtPlan.output, bloomFilterCount, joinAttr)
+            }
             val updatedJoin = Join(ltPlan, rtPlan, join.joinType, join.condition, join.hint)
             logDebug(s"updatedJoin after applying DF :: ${updatedJoin}")
             updatedJoin

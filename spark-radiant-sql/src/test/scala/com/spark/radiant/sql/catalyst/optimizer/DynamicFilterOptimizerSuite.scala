@@ -238,4 +238,23 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
   }
 
+  test("test the Dynamic filter is applied for left anti join on right side of table") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    val df = spark.sql("select * from testDf1 a left anti join testDf2 b on" +
+      " a.test11=b.test21")
+    val dfOptimizer = new SparkSqlDFOptimizerRule()
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{ x => x.isInstanceOf[TypedFilter] }
+    assert(updateDFPlan.isDefined)
+    assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+  }
+
+  test("test the Dynamic filter is applied for left outer join on right side of table") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    val df = spark.sql("select * from testDf1 a left join testDf2 b on" +
+      " a.test11=b.test21 where b.test22=2")
+    val dfOptimizer = new SparkSqlDFOptimizerRule()
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{ x => x.isInstanceOf[TypedFilter] }
+    assert(updateDFPlan.isDefined)
+    assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+  }
 }

@@ -34,7 +34,7 @@ Scenario 1                                 |   Scenario 2
 
 ## Where Dynamic Filtering Works?
 
-1) This works with Inner Join, Right outer join, Left semi join.
+1) This works with Inner Join, Right outer join, Left semi join, Left outer join and Left Anti join.
 2) This works when there is no Broadcast Hash Join Strategy is used.
 3) This works for equi-join conditions.   
 4) This works when we get the filter records from the smaller table within the threshold limit for completion.
@@ -43,7 +43,7 @@ Scenario 1                                 |   Scenario 2
 
 **Improved Network Utilization:**
 Dynamic filter reduces the number of records involved in the join operation and this helps in reducing
-the shuffle data generated and minimizes network I/O.
+the shuffle data generated and minimizes Network I/O.
 
 **Improved Resource Utilization:**
 The number of records involved in the join is reduced as the result of using the Dynamic Filtering in spark.This
@@ -118,6 +118,3 @@ df2.show()
 ```
 
 Note - Will add few more optimization in near future.
-
-* Support the other type of joins, like left outer join, right semi join etc.
-   
