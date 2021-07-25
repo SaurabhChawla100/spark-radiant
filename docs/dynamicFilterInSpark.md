@@ -96,6 +96,19 @@ df.show
 ## Running Dynamic Filter in Spark
 Provide the jar spark-radiant-sql-1.0-SNAPSHOT.jar in the class path for the spark Application. For eg using --jars etc.
 
+or
+
+using --packages -> for jars(spark-radiant-sql-1.0.1.jar, spark-radiant-core-1.0.1.jar) published to maven central
+
+```
+./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.1,io.github.saurabhchawla100:spark-radiant-core:1.0.1"
+
+./bin/spark-submit
+--packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.1,io.github.saurabhchawla100:spark-radiant-core:1.0.1"
+--class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
+
+```
+
 ### 1) Create the optimized DataFrame from the existing Dataframe
 Use the below code to create the optimized data frame.
 ```

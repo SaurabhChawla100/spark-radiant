@@ -50,27 +50,46 @@ mvn clean install -DskipTests / mvn clean package -DskipTests
 
 Build the project locally and add the dependency to your project
 
+or
+
+Use the current released version from the maven central.
+
 For Sql Optimization(Ready for use)
 
 ```
+https://mvnrepository.com/artifact/io.github.saurabhchawla100/spark-radiant-sql/1.0.1
+
 <dependency>
-    <groupId>com.github.saurabhchawla100</groupId>
+    <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant-sql</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
 For Core Optimization (WIP)
 ```
+https://mvnrepository.com/artifact/io.github.saurabhchawla100/spark-radiant-core/1.0.1
+
 <dependency>
-    <groupId>com.github.saurabhchawla100</groupId>
+    <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant-core</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.1</version>
 </dependency>
 
 ```
 
-### Prerequisite
+### running Spark job
+
+Publish the spark-radiant-sql-1.0.1.jar, spark-radiant-core-1.0.1.jar to maven central
+```
+./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.1,io.github.saurabhchawla100:spark-radiant-core:1.0.1"
+
+./bin/spark-submit 
+ --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.1,io.github.saurabhchawla100:spark-radiant-core:1.0.1"
+ --class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar 
+ ```
+
+### Pre-requisite
 spark-radiant have the below prerequisites
 
 a) This is supported with spark-3.0.x and latter version of spark.   
@@ -108,3 +127,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    a) **Enhanced Autoscaling in Spark**- This is WIP
    
    b) **Metrics Collector** - This is WIP
+
+
+### Bug reports / New Feature Request
+
+You can raise new feature request and Bug on this [issuelink](https://github.com/SaurabhChawla100/spark-radiant/issues).
