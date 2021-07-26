@@ -20,6 +20,8 @@ package com.spark.radiant.sql.catalyst.optimizer
 import scala.reflect.io.Directory
 import java.io.File
 
+import com.spark.radiant.sql.api.SparkRadiantSqlApi
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.TypedFilter
@@ -65,8 +67,6 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     df = spark.createDataFrame(Seq((1, 1, 4), (1, 2, 5),
       (3, 3, 7))).toDF("test31", "test32", "test33")
     df.createOrReplaceTempView("testDf3")
-    spark.experimental.extraOptimizations =
-      Seq(DynamicFilterOptimizer)
    // create the parquet datasource file
     spark.createDataFrame(Seq((1, 1), (1, 2),
       (2, 1), (2, 1), (2, 3), (3, 2), (3, 3), (3, 4), (4, 1), (3, 5))).toDF("test11", "test12").
@@ -78,6 +78,9 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
       repartition(1).write.mode("overwrite").
       format("parquet").save("src/test/resources/Testparquet2")
 
+    // adding Extra optimizer rule
+    val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+    sparkRadiantSqlApi.addOptimizerRule(spark)
   }
 
   def deleteDir(path: String): Unit = {

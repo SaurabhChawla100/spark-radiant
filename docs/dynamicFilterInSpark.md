@@ -128,6 +128,17 @@ spark.experimental.extraOptimizations=Seq(com.spark.radiant.sql.catalyst.optimiz
 val df2 = df1.join(df2, Seq("joinCnd"), "inner")
 // df2 will have the dynamic filter
 df2.show()
+
+or
+
+import com.spark.radiant.sql.api.SparkRadiantSqlApi
+// adding Extra optimizer rule
+val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+sparkRadiantSqlApi.addOptimizerRule(spark)
+val df2 = df1.join(df2, Seq("joinCnd"), "inner")
+// df2 will have the dynamic filter
+df2.show()
+
 ```
 
 Note - Will add few more optimization in near future.
