@@ -32,6 +32,7 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, SparkSession}
 private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   val bloomFilterKey = "dynamicFilterBloomFilterKey"
   val fpp = 0.02
+  val dfKeySeparator = "~#~"
 
   private def combineExpression(sep: String, exprs: Column*): Column = {
     val u = ConcatWs(Literal.create(sep, StringType) +: exprs.map(_.expr))
@@ -47,7 +48,8 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   }
 
   private def getBloomFilterKeyColumn(columns: List[Expression]): Expression = {
-    md5(combineExpression("~#~", columns.map(c => new org.apache.spark.sql.Column(c)): _*)).expr
+    md5(combineExpression(dfKeySeparator,
+      columns.map(c => new org.apache.spark.sql.Column(c)): _*)).expr
   }
 
   /**
@@ -60,7 +62,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   private def createBloomFilterKeyColumn(df: DataFrame,
      columns: List[Expression],
      bloomFilterKeyApp: String): DataFrame = {
-    df.withColumn(bloomFilterKeyApp, md5(combineExpression("~#~",
+    df.withColumn(bloomFilterKeyApp, md5(combineExpression(dfKeySeparator,
       columns.map(c => new org.apache.spark.sql.Column(c)): _*)))
   }
 
@@ -317,9 +319,9 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     plan.transform {
       case filter: Filter =>
         val updatedFilterPlan = filter.child match {
-          case typeFilter @ TypedFilter(x ,y , z, u, _) =>
-            val newFilter = Filter(filter.condition, typeFilter.child)
-            TypedFilter(x, y, z, u, newFilter)
+          case typeFilter @ TypedFilter(_, _, argsSchema, _, _)
+            if argsSchema.names.exists(_.contains(bloomFilterKey)) =>
+            typeFilter.copy(child = Filter(filter.condition, typeFilter.child))
           case _ => filter
         }
         updatedFilterPlan
