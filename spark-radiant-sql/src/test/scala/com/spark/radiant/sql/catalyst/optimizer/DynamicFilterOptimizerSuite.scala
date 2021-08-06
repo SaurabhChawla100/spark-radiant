@@ -56,6 +56,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
   override protected def beforeAll(): Unit = {
     sparkConf = new SparkConf()
     spark = createSparkSession(sparkConf)
+    spark.sql("set spark.sql.support.dynamicfilter=true")
     sparkContext.setLogLevel("ERROR")
     var df = spark.createDataFrame(Seq((1, 1), (1, 2),
       (2, 1), (2, 1), (2, 3), (3, 2), (3, 3))).toDF("test11", "test12")

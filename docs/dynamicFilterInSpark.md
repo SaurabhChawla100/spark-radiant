@@ -83,14 +83,16 @@ df.show
 
 ## Config Tuning for Dynamic Filtering in Spark
 
-1) spark.sql.dynamicFilter.bloomFilter.size - We have used BloomFilter to store the Dynamic Filter result. This conf is
+1) **spark.sql.support.dynamicfilter** - Config to add the support of dynamic filter for the sql queries. The default is true.
+
+2) **spark.sql.dynamicFilter.bloomFilter.size** - We have used BloomFilter to store the Dynamic Filter result. This conf is
    used to create the bloomFilter based on the user requirement. By default value is 10000000L.
 
-2) spark.sql.dynamicFilter.completion.threshold - This is the time to complete the dynamic filter optimization in spark.
+3) **spark.sql.dynamicFilter.completion.threshold** - This is the time to complete the dynamic filter optimization in spark.
    This is to prevent the scenario where the smaller table where predicates filtering is huge and not completed in threshold
    time. Its value is in seconds. The default value is 60.
 
-3) spark.sql.dynamicFilter.pushdown.threshold - This is the default value for pushdown of the dynamic filter to 
+4) **spark.sql.dynamicFilter.pushdown.threshold** - This is the default value for pushdown of the dynamic filter to
    FileScan / DataSource scan. The default value is 5000
 
 ## Running Dynamic Filter in Spark

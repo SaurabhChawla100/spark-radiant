@@ -26,20 +26,30 @@ import org.apache.spark.sql.catalyst.rules.Rule
 object DynamicFilterOptimizer extends Rule[LogicalPlan] {
   def apply(plan: LogicalPlan): LogicalPlan = {
     try {
-      val dfOptimizerApi = new SparkRadiantSqlApi()
       val spark = SparkSession.getActiveSession.get
-      var updatedPlan = dfOptimizerApi.addDynamicFiltersToDF(spark, plan)
-      if (updatedPlan != plan) {
-        val sqlUtils = new SparkSqlUtils()
-        val df = sqlUtils.createDfFromLogicalPlan(spark, updatedPlan)
-        val dfOptimizer = new SparkSqlDFOptimizerRule()
-        updatedPlan = dfOptimizer.pushFilterBelowTypedFilterRule(df.queryExecution.optimizedPlan)
+      if (applyDynamicFilter(spark)) {
+        val dfOptimizerApi = new SparkRadiantSqlApi()
+        var updatedPlan = dfOptimizerApi.addDynamicFiltersToDF(spark, plan)
+        if (updatedPlan != plan) {
+          val sqlUtils = new SparkSqlUtils()
+          val df = sqlUtils.createDfFromLogicalPlan(spark, updatedPlan)
+          val dfOptimizer = new SparkSqlDFOptimizerRule()
+          updatedPlan = dfOptimizer.pushFilterBelowTypedFilterRule(df.queryExecution.optimizedPlan)
+        }
+        updatedPlan
+      } else {
+        plan
       }
-      updatedPlan
     } catch {
       case ex: Throwable =>
         logDebug(s"Not able to create DynamicFilter: ${ex}")
         plan
     }
+  }
+
+  private def applyDynamicFilter(spark: SparkSession): Boolean = {
+    spark.conf.get("spark.sql.support.dynamicfilter",
+      spark.sparkContext.getConf.get("spark.sql.support.dynamicfilter",
+        "true")).toBoolean
   }
 }
