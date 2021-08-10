@@ -106,6 +106,17 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     assert(updateDFPlan.isEmpty)
   }
 
+  test("test the Dynamic filter is applied to left side of the table if its BHJ") {
+    spark.sql("set spark.sql.use.dynamicfilter.bhj=true")
+    val df = spark.sql("select * from testDf1 a join testDf2 b on" +
+      " a.test11=b.test21 where b.test22=2")
+    val dfOptimizer = new SparkSqlDFOptimizerRule()
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{ x => x.isInstanceOf[TypedFilter] }
+    assert(updateDFPlan.isDefined)
+    assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+    spark.sql("set spark.sql.use.dynamicfilter.bhj=false")
+  }
+
   test("test the Dynamic filter is applied to left side of the table") {
     spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
     val df = spark.sql("select * from testDf1 a join testDf2 b on" +

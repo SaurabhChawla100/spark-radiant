@@ -241,9 +241,15 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     }
   }
 
-  private def compareJoinSides(spark: SparkSession):  Boolean = {
+  private def compareJoinSides()(implicit spark: SparkSession):  Boolean = {
     spark.conf.get("spark.sql.dynamicfilter.comparejoinsides",
       spark.sparkContext.getConf.get("spark.sql.dynamicfilter.comparejoinsides",
+        "false")).toBoolean
+  }
+
+  private def useDynamicFilterInBHJ()(implicit spark: SparkSession):  Boolean = {
+    spark.conf.get("spark.sql.use.dynamicfilter.bhj",
+      spark.sparkContext.getConf.get("spark.sql.use.dynamicfilter.bhj",
         "false")).toBoolean
   }
 
@@ -254,9 +260,9 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     }
   }
 
-  private def getOptimizedLogicalPlan(spark: SparkSession,
+  private def getOptimizedLogicalPlan(
      plan: LogicalPlan,
-     bloomFilterCount: Long): LogicalPlan = {
+     bloomFilterCount: Long)(implicit spark: SparkSession): LogicalPlan = {
     logDebug("Initial plan: "+ plan)
     val updatedPlan = plan.transform {
       case join: Join if validJoinForDynamicFilter(join.joinType) =>
@@ -264,8 +270,11 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
         joinCondition = join.condition
         val bhjThreshold: Long = spark.conf.get("spark.sql.autoBroadcastJoinThreshold")
           .split("b").head.toLong
+        // use DF in the BHJ for scenarios where one table is so huge and there is
+        // benefit of using DF for reducing the scan and as well as the number of
+        // records in filter
         val bhjPresent = (join.left.stats.sizeInBytes <= bhjThreshold
-          || join.right.stats.sizeInBytes <= bhjThreshold)
+          || join.right.stats.sizeInBytes <= bhjThreshold) && !useDynamicFilterInBHJ
 
         // if bhjPresent is not present than only add this logic
         if (!bhjPresent && joinCondition.isDefined
@@ -290,7 +299,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
               var rtPlan = join.right
               // Finding out the candidate where dynamic filter needs to be applied.
               // This valid only for inner joins
-              if (join.joinType == Inner && compareJoinSides(spark) &&
+              if (join.joinType == Inner && compareJoinSides &&
                 sizeScanValidation(join.right) &&
                 join.left.stats.sizeInBytes < join.right.stats.sizeInBytes) {
                 rtPlan = join.left
@@ -332,7 +341,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     plan: LogicalPlan,
     bloomFilterCount: Long): LogicalPlan = {
     try {
-      val updatedPlan = getOptimizedLogicalPlan(spark, plan, bloomFilterCount)
+      val updatedPlan = getOptimizedLogicalPlan(plan, bloomFilterCount)(spark)
       updatedPlan
     }
     catch {

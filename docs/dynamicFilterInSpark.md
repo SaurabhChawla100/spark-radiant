@@ -95,6 +95,9 @@ df.show
 4) **spark.sql.dynamicFilter.pushdown.threshold** - This is the default value for pushdown of the dynamic filter to
    FileScan / DataSource scan. The default value is 5000
 
+5) **spark.sql.use.dynamicfilter.bhj** - Use DF in the BHJ for scenarios where one table is so huge and there is
+   benefit of using DF for reducing the scan and as well as the number of records in filter. The default value is false.
+
 ## Running Dynamic Filter in Spark
 Provide the jar spark-radiant-sql-1.0-SNAPSHOT.jar in the class path for the spark Application. For eg using --jars etc.
 
