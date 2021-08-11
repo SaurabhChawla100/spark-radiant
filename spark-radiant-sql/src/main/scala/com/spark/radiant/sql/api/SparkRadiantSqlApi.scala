@@ -137,6 +137,8 @@ class SparkRadiantSqlApi extends Logging with Serializable {
   def addOptimizerRule(spark: SparkSession): Unit = {
     // Importing the extra Optimizations rule
     spark.experimental.extraOptimizations =
-      Seq(com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer)
+      Seq(com.spark.radiant.sql.catalyst.optimizer.ExchangeOptimizeRule,
+        com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
+      )
   }
 }

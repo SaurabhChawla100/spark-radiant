@@ -120,7 +120,21 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
         val withColMap = Map("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
         val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
 
-   c) **BloomFilter Index** - This is WIP
+   c) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
+      present and also the exchange which is introduced by SMJ and other join that add the shuffle exchange, So in total
+      there are 2 exchange present in the executed plan and cost of creating both exchange are almost same. In that scenario
+      we skip the exchange created by the partial aggregate and there will be only one exchange and partial and complete
+      aggregation done on the same exchange, now instead of having 2 exchange there will be only one exchange. This can be
+      enabled using --conf spark.sql.skip.partial.exchange.rule=true
+      
+      ```
+         import com.spark.radiant.sql.api.SparkRadiantSqlApi
+         // adding Extra optimizer rule
+         val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+         sparkRadiantSqlApi.addOptimizerRule(spark)
+      ```
+   
+   d)  **BloomFilter Index** - This is WIP
 
 2) **spark-radiant-core** - This contains the optimization related to total cost optimization.
    
