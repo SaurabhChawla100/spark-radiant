@@ -32,9 +32,9 @@ object ExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
               .split("b").head.toLong
             val bhjPresent = (join.left.stats.sizeInBytes <= bhjThreshold
               || join.right.stats.sizeInBytes <= bhjThreshold)
-            if ((validForExchangeOptRule(join.left) ||
-              validForExchangeOptRule(join.right)) && !bhjPresent) {
-              val condRef = join.condition.get.references
+            val condRef = join.condition.get.references
+            if ((validForExchangeOptRule(join.left, condRef) ||
+              validForExchangeOptRule(join.right, condRef)) && !bhjPresent) {
               val newLeft = getExchangeOptPlan(join.left, condRef, condRef.head)
               val newRight = getExchangeOptPlan(join.right, condRef, condRef.tail.head)
               join.copy(left = newLeft, right = newRight)
@@ -70,10 +70,13 @@ object ExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     }
   }
 
-  private def validForExchangeOptRule(logicalPlan: LogicalPlan): Boolean = {
+  private def validForExchangeOptRule(logicalPlan: LogicalPlan, ref: AttributeSet): Boolean = {
     logicalPlan match {
       case agg: Aggregate =>
-        !agg.child.isInstanceOf[RepartitionByExpression]
+        !agg.child.isInstanceOf[RepartitionByExpression] &&
+          agg.groupingExpressions.length > 1 &&
+          agg.groupingExpressions.length > agg.groupingExpressions.map(expr =>
+            expr.asInstanceOf[NamedExpression]).count(x => ref.contains(x))
       case _ => false
     }
   }
