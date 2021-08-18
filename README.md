@@ -134,7 +134,19 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
          sparkRadiantSqlApi.addOptimizerRule(spark)
       ```
    
-   d)  **BloomFilter Index** - This is WIP
+   d) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
+   So there will be exchange after partial aggregation and there are scenarios where cost of partial aggregate + exchange
+   is high. In those scenarios it's better to have exchange first and then apply both partial aggregate and complete
+   aggregate on the exchange. This can be enabled using --conf spark.sql.optimize.explode.rule=true
+
+      ```
+         import com.spark.radiant.sql.api.SparkRadiantSqlApi
+         // adding Extra optimizer rule
+         val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+         sparkRadiantSqlApi.addOptimizerRule(spark)
+      ``` 
+
+   e)  **BloomFilter Index** - This is WIP
 
 2) **spark-radiant-core** - This contains the optimization related to total cost optimization.
    
