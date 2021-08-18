@@ -114,7 +114,28 @@ using --packages -> for jars(spark-radiant-sql-1.0.1.jar, spark-radiant-core-1.0
 
 ```
 
-### 1) Create the optimized DataFrame from the existing Dataframe
+### 1) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
+
+```
+import com.spark.radiant.sql.api.SparkRadiantSqlApi
+// adding Extra optimizer rule
+val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+sparkRadiantSqlApi.addOptimizerRule(spark)
+val df3 = df1.join(df2, Seq("joinCnd"), "inner")
+// df3 will have the dynamic filter
+df3.show()
+
+or 
+
+// Importing the extra Optimizations rule
+spark.experimental.extraOptimizations=Seq(com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer)
+val df3 = df1.join(df2, Seq("joinCnd"), "inner")
+// df3 will have the dynamic filter
+df3.show()
+
+```
+
+### 2) Create the optimized DataFrame from the existing Dataframe
 Use the below code to create the optimized data frame.
 ```
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
@@ -125,25 +146,5 @@ val sparkRadiantSqlApi = new SparkRadiantSqlApi()
 val df3 = sparkRadiantSqlApi.optimizeDataFrame(sparkSession, df2)
 ```
 
-### 2) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
-
-```
-// Importing the extra Optimizations rule
-spark.experimental.extraOptimizations=Seq(com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer)
-val df2 = df1.join(df2, Seq("joinCnd"), "inner")
-// df2 will have the dynamic filter
-df2.show()
-
-or
-
-import com.spark.radiant.sql.api.SparkRadiantSqlApi
-// adding Extra optimizer rule
-val sparkRadiantSqlApi = new SparkRadiantSqlApi()
-sparkRadiantSqlApi.addOptimizerRule(spark)
-val df2 = df1.join(df2, Seq("joinCnd"), "inner")
-// df2 will have the dynamic filter
-df2.show()
-
-```
 
 Note - Will add few more optimization in near future.

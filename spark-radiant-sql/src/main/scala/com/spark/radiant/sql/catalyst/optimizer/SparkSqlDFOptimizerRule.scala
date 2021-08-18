@@ -18,6 +18,7 @@
 package com.spark.radiant.sql.catalyst.optimizer
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
   ConcatWs, EqualTo, Expression, In, Literal, Or}
 import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftAnti, LeftOuter,
@@ -218,12 +219,18 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case filter @ Filter(_, LogicalRelation(_, _, _, _))  if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr, filter,
           predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
+      case filter @ Filter(_, HiveTableRelation(_, _, _, _, _))  if !hold =>
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr, filter,
+          predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           localTableScan, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case logicalRelation: LogicalRelation if !hold =>
        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           logicalRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
+      case hiveTableRelation: HiveTableRelation if !hold =>
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+          hiveTableRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
     }
     logDebug(s"optimized DynamicFilteredPlan:: ${updatedDynamicFilteredPlan}")
     updatedDynamicFilteredPlan
@@ -234,9 +241,14 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   private def sizeScanValidation(plan: LogicalPlan): Boolean = {
     plan match {
       case Project(_, Filter(_, LocalRelation(_, _, _)))
-           | Project(_, Filter(_, LogicalRelation(_, _, _, _))) => true
-      case Filter(_, LocalRelation(_, _, _)) | Filter(_, LogicalRelation(_, _, _, _)) => true
-      case LocalRelation(_, _, _) |  LogicalRelation(_, _, _, _) => true
+           | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
+           |  Project(_, Filter(_, HiveTableRelation(_, _, _, _, _))) => true
+      case Filter(_, LocalRelation(_, _, _))
+           | Filter(_, LogicalRelation(_, _, _, _))
+           | Filter(_, HiveTableRelation(_, _, _, _, _)) => true
+      case LocalRelation(_, _, _)
+           |  LogicalRelation(_, _, _, _)
+           |  HiveTableRelation(_, _, _, _, _) => true
       case _ => false
     }
   }
