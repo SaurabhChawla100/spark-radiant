@@ -1,11 +1,15 @@
 package com.spark.radiant.sql.catalyst.optimizer
 
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.RepartitionByExpression
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+import org.apache.spark.sql.execution.adaptive.ShuffleQueryStageExec
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
+import org.apache.spark.sql.execution.exchange.ReusedExchangeExec
+
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.must.Matchers
@@ -36,6 +40,7 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
     sparkConf = new SparkConf()
     spark = createSparkSession(sparkConf)
     spark.sql("set spark.sql.skip.partial.exchange.rule=true")
+    spark.sql("set spark.sql.optimize.union.reuse.exchange.rule=true")
     sparkContext.setLogLevel("ERROR")
     var df = spark.createDataFrame(Seq((1, 1), (1, 2),
       (2, 1), (2, 1), (2, 3), (3, 2), (3, 3))).toDF("test11", "test12")
@@ -147,5 +152,24 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
         ex
     }
     assert(exchangeCount == 2)
+  }
+
+  test("test the UnionReuseExchangeOptimizeRule is applied") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    val df = spark.sql("select test11, count(*) as count from testDf1" +
+      " group by test11 union select test11, sum(test11) as count" +
+      " from testDf1 group by test11")
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{x =>
+      x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isDefined)
+    df.collect()
+    val executedPlan = df.queryExecution.executedPlan.transform {
+      case ad: AdaptiveSparkPlanExec => ad.executedPlan
+      case sh: ShuffleQueryStageExec => sh.plan
+      case ex => ex
+    }
+    val reuseExchange =
+      executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
+    assert(reuseExchange.nonEmpty)
   }
 }
