@@ -2,7 +2,8 @@ package com.spark.radiant.sql.catalyst.optimizer
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Generate, LogicalPlan, RepartitionByExpression}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Generate, LogicalPlan,
+  Repartition, RepartitionByExpression}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.expressions.Explode
 
@@ -19,11 +20,19 @@ object ExplodeOptimizeRule extends Rule[LogicalPlan] with Logging {
     val spark = SparkSession.getActiveSession.get
     if (useExplodeOptRule(spark)) {
       try {
-        val updatedPlan = plan.transform {
-          case gen: Generate if gen.generator.isInstanceOf[Explode] =>
-            gen.copy(child = applyExplodeOptRule(gen.child))
+        val repartitionExist = plan.find {
+          case Repartition(_, _, _) | RepartitionByExpression(_, _, _) => true
+          case _ => false
         }
-        updatedPlan
+        if (repartitionExist.isEmpty) {
+          val updatedPlan = plan.transform {
+            case gen: Generate if gen.generator.isInstanceOf[Explode] =>
+              gen.copy(child = applyExplodeOptRule(gen.child))
+          }
+          updatedPlan
+        } else {
+          plan
+        }
       } catch {
         case ex: AnalysisException =>
           logDebug(s"exception on applying ExplodeOptimizeRule: ${ex}")

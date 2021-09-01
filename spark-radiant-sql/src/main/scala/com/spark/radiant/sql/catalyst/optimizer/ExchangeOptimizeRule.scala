@@ -4,7 +4,8 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.{Inner, JoinType}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Join, LogicalPlan, RepartitionByExpression}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Join,
+  LogicalPlan, Repartition, RepartitionByExpression}
 import org.apache.spark.sql.catalyst.rules.Rule
 
 /**
@@ -22,28 +23,38 @@ object ExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     val spark = SparkSession.getActiveSession.get
     if (useExchangeOptRule(spark)) {
       try {
-        // TODO Add the intelligence in the rule for predicting secnarios where
-        //  this can be applied instead of all the aggregate present in join
-        val updatedPlan = plan.transform {
-          case join: Join if validJoinForExchangeOptRule(join.joinType) =>
-            var joinCondition: Option[Expression] = None
-            joinCondition = join.condition
-            val bhjThreshold: Long = spark.conf.get("spark.sql.autoBroadcastJoinThreshold")
-              .split("b").head.toLong
-            val bhjPresent = (join.left.stats.sizeInBytes <= bhjThreshold
-              || join.right.stats.sizeInBytes <= bhjThreshold)
-            val condRef = join.condition.get.references
-            if ((validForExchangeOptRule(join.left, condRef) ||
-              validForExchangeOptRule(join.right, condRef)) && !bhjPresent) {
-              val newLeft = getExchangeOptPlan(join.left, condRef, condRef.head)
-              val newRight = getExchangeOptPlan(join.right, condRef, condRef.tail.head)
-              join.copy(left = newLeft, right = newRight)
-            } else {
-              join
-            }
+        // check if already the plan is not having the repartition than only
+        // add this optimization.
+        val repartitionExist = plan.find {
+          case Repartition(_, _, _) | RepartitionByExpression(_, _, _) => true
+          case _ => false
         }
-        logDebug(s"updatedPlan after ExchangeOptimizeRule: $updatedPlan")
-        updatedPlan
+        if (repartitionExist.isEmpty) {
+          // TODO Add the intelligence in the rule for predicting secnarios where
+          //  this can be applied instead of all the aggregate present in join
+          val updatedPlan = plan.transform {
+            case join: Join if validJoinForExchangeOptRule(join.joinType) =>
+              var joinCondition: Option[Expression] = None
+              joinCondition = join.condition
+              val bhjThreshold: Long = spark.conf.get("spark.sql.autoBroadcastJoinThreshold")
+                .split("b").head.toLong
+              val bhjPresent = (join.left.stats.sizeInBytes <= bhjThreshold
+                || join.right.stats.sizeInBytes <= bhjThreshold)
+              val condRef = join.condition.get.references
+              if ((validForExchangeOptRule(join.left, condRef) ||
+                validForExchangeOptRule(join.right, condRef)) && !bhjPresent) {
+                val newLeft = getExchangeOptPlan(join.left, condRef, condRef.head)
+                val newRight = getExchangeOptPlan(join.right, condRef, condRef.tail.head)
+                join.copy(left = newLeft, right = newRight)
+              } else {
+                join
+              }
+          }
+          logDebug(s"updatedPlan after ExchangeOptimizeRule: $updatedPlan")
+          updatedPlan
+        } else {
+          plan
+        }
       } catch {
         case ex: AnalysisException =>
           logDebug(s"exception in ExchangeOptimizeRule optimizer rule : $ex")

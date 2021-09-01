@@ -172,4 +172,35 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
       executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
     assert(reuseExchange.nonEmpty)
   }
+
+  test("test the ExchangeOptimizeRule is not applied if repartition already present") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    val df = spark.sql("select test11, test12, count(*) from" +
+      " testDf1 group by test11, test12").repartition(10)
+    val df1 = spark.sql("select * from testDf2")
+    val df2 = df.join(df1, df("test11") === df1("test21"), "inner")
+    val updateDFPlan = df2.queryExecution.optimizedPlan.find{x => x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isEmpty)
+  }
+
+  test("test the UnionReuseExchangeOptimizeRule is not applied if repartition already present") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    val df = spark.sql("select test11, count(*) as count from testDf1" +
+      " group by test11").repartition(10)
+    val df1 = spark.sql("select test11, sum(test11) as count" +
+      " from testDf1 group by test11").repartition(10)
+    val df2 = df.union(df1)
+    val updateDFPlan = df2.queryExecution.optimizedPlan.find{x =>
+      x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isEmpty)
+    df2.collect()
+    val executedPlan = df2.queryExecution.executedPlan.transform {
+      case ad: AdaptiveSparkPlanExec => ad.executedPlan
+      case sh: ShuffleQueryStageExec => sh.plan
+      case ex => ex
+    }
+    val reuseExchange =
+      executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
+    assert(reuseExchange.isEmpty)
+  }
 }

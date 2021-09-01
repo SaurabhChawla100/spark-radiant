@@ -6,8 +6,8 @@ import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LocalRelation,
-  LogicalPlan, RepartitionByExpression, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LocalRelation, LogicalPlan,
+  Repartition, RepartitionByExpression, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 
 /**
@@ -22,18 +22,26 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     val spark = SparkSession.getActiveSession.get
     if (useUnionReuseExchangeRule(spark)) {
       try {
-        val updatedPlan = plan.transform {
-          case union: Union =>
-            val left = union.children.head
-            val right = union.children.last
-            if (compareChildForUnionOpt(left, right)) {
-              union.copy(Seq(getUpdateChildPlanForUnion(left),
-                getUpdateChildPlanForUnion(right)))
-            } else {
-              union
-            }
+        val repartitionExist = plan.find {
+          case Repartition(_, _, _) | RepartitionByExpression(_, _, _) => true
+          case _ => false
         }
-        updatedPlan
+        if (repartitionExist.isEmpty) {
+          val updatedPlan = plan.transform {
+            case union: Union =>
+              val left = union.children.head
+              val right = union.children.last
+              if (compareChildForUnionOpt(left, right)) {
+                union.copy(Seq(getUpdateChildPlanForUnion(left),
+                  getUpdateChildPlanForUnion(right)))
+              } else {
+                union
+              }
+          }
+          updatedPlan
+        } else {
+          plan
+        }
       } catch {
         case ex: AnalysisException =>
           logDebug(s"exception on applying UnionReuseExchangeOptimizeRule: ${ex}")
@@ -44,7 +52,7 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     }
   }
 
-  def getUpdateChildPlanForUnion(plan: LogicalPlan): LogicalPlan = {
+  private def getUpdateChildPlanForUnion(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case agg@Aggregate(_, _, child) if validScenariosForOptPlan(child) =>
         genPlanForAggregate(agg)
@@ -52,7 +60,7 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     }
   }
 
-  def genPlanForAggregate(plan: LogicalPlan): LogicalPlan = {
+  private def genPlanForAggregate(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case agg: Aggregate if !agg.child.isInstanceOf[RepartitionByExpression] =>
        agg.copy(child = RepartitionByExpression(agg.groupingExpressions, agg.child, None))
@@ -75,7 +83,7 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     }
   }
 
-  def compareChildForUnionOpt(ltPlan: LogicalPlan, rtPlan: LogicalPlan): Boolean = {
+  private def compareChildForUnionOpt(ltPlan: LogicalPlan, rtPlan: LogicalPlan): Boolean = {
     var optFlag = false
     if (ltPlan.isInstanceOf[Aggregate] && rtPlan.isInstanceOf[Aggregate]) {
       val leftAggr = ltPlan.asInstanceOf[Aggregate]
@@ -88,7 +96,7 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     optFlag
   }
 
-  def checkSameRelForOptPlan(leftPlan: LogicalPlan, rightPlan: LogicalPlan): Boolean = {
+  private def checkSameRelForOptPlan(leftPlan: LogicalPlan, rightPlan: LogicalPlan): Boolean = {
     var optFlag = false
     if (leftPlan.getClass.equals(rightPlan.getClass)) {
       leftPlan match {
@@ -108,7 +116,7 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     optFlag
   }
 
-  def validateGroupingExpr(leftExpr: Seq[Expression], rightExpr: Seq[Expression]): Boolean = {
+  private def validateGroupingExpr(leftExpr: Seq[Expression], rightExpr: Seq[Expression]): Boolean = {
     val leftExprAttrs = leftExpr.map(x => x.asInstanceOf[AttributeReference].name).toSet
     val rightExprAttrs = rightExpr.map(x => x.asInstanceOf[AttributeReference].name).toSet
     leftExprAttrs == rightExprAttrs
