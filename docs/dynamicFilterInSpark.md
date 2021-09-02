@@ -146,5 +146,25 @@ val sparkRadiantSqlApi = new SparkRadiantSqlApi()
 val df3 = sparkRadiantSqlApi.optimizeDataFrame(sparkSession, df2)
 ```
 
+### 3) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark in pyspark
+Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
+
+#### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
+```
+./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+
+// Importing the extra Optimizations rule
+>>> from sparkradiantsqlpy import SparkRadiantSqlApi
+>>> SparkRadiantSqlApi(spark).addExtraOptimizerRule()
+>>> df3 = df1.join(df2, Seq("joinCnd"), "inner")
+>>> df3.show()
+
+or 
+
+>>> spark._jvm.com.spark.radiant.sql.api.SparkRadiantSqlApi().addOptimizerRule(spark._jsparkSession)
+>>> df3 = df1.join(df2, Seq("joinCnd"), "inner")
+>>> df3.show()
+```
+
 
 Note - Will add few more optimization in near future.

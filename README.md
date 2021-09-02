@@ -132,6 +132,26 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
          val sparkRadiantSqlApi = new SparkRadiantSqlApi()
          sparkRadiantSqlApi.addOptimizerRule(spark)
       ```
+     
+    #### In PySpark
+      Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
+
+      #### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
+      ``` 
+        
+   
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+      
+               // Importing the extra Optimizations rule
+               from sparkradiantsqlpy import SparkRadiantSqlApi
+               SparkRadiantSqlApi(spark).addExtraOptimizerRule()
+                    
+              or
+         
+              // Importing the extra Optimizations rule
+              spark._jvm.com.spark.radiant.sql.api.SparkRadiantSqlApi().addOptimizerRule(spark._jsparkSession) 
+   
+      ```
 
    d) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
       present and also the exchange which is introduced by SMJ and other join that add the shuffle exchange, So in total
@@ -146,6 +166,25 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
          val sparkRadiantSqlApi = new SparkRadiantSqlApi()
          sparkRadiantSqlApi.addOptimizerRule(spark)
       ```
+   #### In PySpark
+       Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
+
+   #### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
+      ``` 
+         In PySpark
+   
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+      
+               // Importing the extra Optimizations rule
+               from sparkradiantsqlpy import SparkRadiantSqlApi
+               SparkRadiantSqlApi(spark).addExtraOptimizerRule()
+                    
+              or
+         
+              // Importing the extra Optimizations rule
+              spark._jvm.com.spark.radiant.sql.api.SparkRadiantSqlApi().addOptimizerRule(spark._jsparkSession) 
+
+      ```
    
    e) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
    So there will be exchange after partial aggregation and there are scenarios where cost of partial aggregate + exchange
@@ -158,6 +197,25 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
          val sparkRadiantSqlApi = new SparkRadiantSqlApi()
          sparkRadiantSqlApi.addOptimizerRule(spark)
       ``` 
+   #### In PySpark
+       Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
+
+   #### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
+
+      ``` 
+         In PySpark
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+      
+               // Importing the extra Optimizations rule
+               from sparkradiantsqlpy import SparkRadiantSqlApi
+               SparkRadiantSqlApi(spark).addExtraOptimizerRule()
+                    
+              or
+         
+              // Importing the extra Optimizations rule
+              spark._jvm.com.spark.radiant.sql.api.SparkRadiantSqlApi().addOptimizerRule(spark._jsparkSession) 
+
+      ```
 
    f)  **BloomFilter Index** - This is WIP
 
