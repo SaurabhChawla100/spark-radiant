@@ -102,7 +102,9 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
    a) **Using Dynamic Filtering in Spark** - Please refer the docs for [Dynamic Filtering](docs/dynamicFilterInSpark.md).
 
-   b) **Add multiple value in the withColumn Api of Spark** - Till now you can add one by one columns
+   b) **Using Size based Join ReOrdering in Spark** - Please refer the docs for [SizeBasedJoinReOrdering](docs/SizeBasedJoinOrderingRerInSpark.md).
+
+   c) **Add multiple value in the withColumn Api of Spark** - Till now you can add one by one columns
    using withColumn call with respect to spark dataframe. If we need to multiple column in dataframe there
    is need to call this withColumn again and again.
    For example
@@ -120,7 +122,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
         val withColMap = Map("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
         val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
 
-   c) **UnionReuseExchangeOptimizeRule** - This rule works for scenarios when union is
+   d) **UnionReuseExchangeOptimizeRule** - This rule works for scenarios when union is
       present with aggregation having same grouping column. The union is between the same table/datasource.
       In this scenario instead of scan twice the table/datasource because of the child of Union,
       There will be one scan of table/datasource, and the other child of union will reuse this scan.This feature is enabled
@@ -153,7 +155,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    
       ```
 
-   d) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
+   e) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
       present and also the exchange which is introduced by SMJ and other join that add the shuffle exchange, So in total
       there are 2 exchange present in the executed plan and cost of creating both exchange are almost same. In that scenario
       we skip the exchange created by the partial aggregate and there will be only one exchange and partial and complete
@@ -186,7 +188,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ```
    
-   e) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
+   f) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
    So there will be exchange after partial aggregation and there are scenarios where cost of partial aggregate + exchange
    is high. In those scenarios it's better to have exchange first and then apply both partial aggregate and complete
    aggregate on the exchange. This can be enabled using --conf spark.sql.optimize.explode.rule=true
@@ -217,7 +219,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ```
 
-   f)  **BloomFilter Index** - This is WIP
+   g)  **BloomFilter Index** - This is WIP
 
 2) **spark-radiant-core** - This contains the optimization related to total cost optimization.
    
