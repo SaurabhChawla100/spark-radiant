@@ -48,9 +48,12 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
         .split("b").head.toLong
       if (applySizeBasedJoinReOrder(spark)) {
         plan.transform {
-          case join: Join if validRightSide(join.right) && join.left.isInstanceOf[Join]
+          case join: Join if validRightSide(join.right) && validChildForReOrder(join.left)
             && validJoinType(join.joinType) =>
-            var leftPlan = join.left.asInstanceOf[Join]
+            var leftPlan = join.left match {
+              case Project(_, child: Join) if validJoinType(child.joinType) => child
+              case join: Join => join
+            }
             val rightPlan = join.right
             var updatedJoin = join
             val rightOutputSet = rightPlan.output.map(x => x.exprId)
@@ -107,7 +110,15 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
 
   private def validJoinType(joinType: JoinType): Boolean = {
     joinType match {
-      case  Inner => true
+      case Inner => true
+      case _ => false
+    }
+  }
+
+  private def validChildForReOrder(plan: LogicalPlan): Boolean = {
+    plan match {
+      case Project(_, child: Join) => true
+      case join: Join => true
       case _ => false
     }
   }
