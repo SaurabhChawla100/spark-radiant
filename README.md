@@ -1,7 +1,7 @@
 [![License](http://img.shields.io/:license-Apache_v2-blue.svg)](LICENSE)
 # spark-radiant
 
-spark-radiant is Apache Spark Performance Optimizer Project.
+spark-radiant is Apache Spark Performance and Cost Optimizer Project.
 
 ### Providing Spark as a Service with your own Fork of Spark
 
@@ -58,35 +58,33 @@ Use the current released version from the maven central.
 For Sql Optimization(Ready for use)
 
 ```
-https://mvnrepository.com/artifact/io.github.saurabhchawla100/spark-radiant-sql/1.0.1
 
 <dependency>
     <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant-sql</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
 </dependency>
 ```
 
 For Core Optimization (WIP)
 ```
-https://mvnrepository.com/artifact/io.github.saurabhchawla100/spark-radiant-core/1.0.1
 
 <dependency>
     <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant-core</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
 </dependency>
 
 ```
 
 ### running Spark job
 
-Publish the spark-radiant-sql-1.0.1.jar, spark-radiant-core-1.0.1.jar to maven central
+Publish the spark-radiant-sql-1.0.2.jar, spark-radiant-core-1.0.2.jar to maven central
 ```
-./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.1,io.github.saurabhchawla100:spark-radiant-core:1.0.1"
+./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
 
 ./bin/spark-submit 
- --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.1,io.github.saurabhchawla100:spark-radiant-core:1.0.1"
+ --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
  --class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar 
  ```
 
@@ -137,13 +135,11 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
       ```
      
     #### In PySpark
-      Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
-
-      #### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
+   
       ``` 
         In PySpark
    
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -170,13 +166,11 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
          sparkRadiantSqlApi.addOptimizerRule(spark)
       ```
    #### In PySpark
-       Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
-
-   #### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
+      
       ``` 
          In PySpark
    
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -201,13 +195,10 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
          sparkRadiantSqlApi.addOptimizerRule(spark)
       ``` 
    #### In PySpark
-       Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
-
-   #### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
 
       ``` 
          In PySpark
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi

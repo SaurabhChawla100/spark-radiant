@@ -53,17 +53,17 @@ Importing the rule for SizeBasedJoinReOrdering on the catalyst optimizer of the 
    The default value is false.
 
 ## Running SizeBasedJoinReOrdering in Spark
-Provide the jar spark-radiant-sql-1.0.2-SNAPSHOT.jar in the class path for the spark Application. For eg using --jars etc.
+Provide the jar spark-radiant-sql-1.0.2.1.jar in the class path for the spark Application. For eg using --jars etc.
 
 or
 
-using --packages -> for jars(spark-radiant-sql-1.0.2-SNAPSHOT.jar) published to maven central
+using --packages -> for jars(spark-radiant-sql-1.0.2.1.jar) published to maven central
 
 ```
-./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT,io.github.saurabhchawla100:spark-radiant-core:1.0.2-SNAPSHOT"
+./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2.1"
 
 ./bin/spark-submit
---packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT,io.github.saurabhchawla100:spark-radiant-core:1.0.2-SNAPSHOT"
+--packages "io.github.saurabhchawla100:spark-radiant-1.0.2.1"
 --class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
 
 ```
@@ -79,11 +79,8 @@ sparkRadiantSqlApi.addOptimizerRule(spark)
 ```
 
 ### 2) Importing the rule for SizeBasedJoinReOrdering on the catalyst optimizer of the Apache Spark in pyspark
-Build the spark-radiant-sql for the spark-radiant-sql:1.0.2-SNAPSHOT add the dependency in the maven repo.
-
-#### In next release for spark-radiant-sql:1.0.2 the pyspark support will be available inside the jar ####
 ```
-./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2-SNAPSHOT
+./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2.1
 
 // Importing the extra Optimizations rule
 >>> from sparkradiantsqlpy import SparkRadiantSqlApi
