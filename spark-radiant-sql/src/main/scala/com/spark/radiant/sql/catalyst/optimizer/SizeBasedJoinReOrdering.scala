@@ -48,9 +48,12 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
         .split("b").head.toLong
       if (applySizeBasedJoinReOrder(spark)) {
         plan.transform {
-          case join: Join if validRightSide(join.right) && join.left.isInstanceOf[Join]
+          case join: Join if validRightSide(join.right) && validChildForReOrder(join.left)
             && validJoinType(join.joinType) =>
-            var leftPlan = join.left.asInstanceOf[Join]
+            var leftPlan = join.left match {
+              case Project(_, child: Join) if validJoinType(child.joinType) => child
+              case join: Join => join
+            }
             val rightPlan = join.right
             var updatedJoin = join
             val rightOutputSet = rightPlan.output.map(x => x.exprId)
@@ -91,23 +94,31 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
   }
 
   private def validRightSide(plan: LogicalPlan): Boolean = {
-   plan match {
-     case Project(_, Filter(_, LocalRelation(_, _, _)))
-          | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
-          |  Project(_, Filter(_, HiveTableRelation(_, _, _, _, _))) => true
-     case Filter(_, LocalRelation(_, _, _))
-          | Filter(_, LogicalRelation(_, _, _, _))
-          | Filter(_, HiveTableRelation(_, _, _, _, _)) => true
-     case LocalRelation(_, _, _)
-          |  LogicalRelation(_, _, _, _)
-          |  HiveTableRelation(_, _, _, _, _) => true
-     case _ => false
-   }
+    plan match {
+      case Project(_, Filter(_, LocalRelation(_, _, _)))
+           | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
+           |  Project(_, Filter(_, HiveTableRelation(_, _, _, _, _))) => true
+      case Filter(_, LocalRelation(_, _, _))
+           | Filter(_, LogicalRelation(_, _, _, _))
+           | Filter(_, HiveTableRelation(_, _, _, _, _)) => true
+      case LocalRelation(_, _, _)
+           |  LogicalRelation(_, _, _, _)
+           |  HiveTableRelation(_, _, _, _, _) => true
+      case _ => false
+    }
   }
 
   private def validJoinType(joinType: JoinType): Boolean = {
     joinType match {
-      case  Inner => true
+      case Inner => true
+      case _ => false
+    }
+  }
+
+  private def validChildForReOrder(plan: LogicalPlan): Boolean = {
+    plan match {
+      case Project(_, child: Join) => true
+      case join: Join => true
       case _ => false
     }
   }
