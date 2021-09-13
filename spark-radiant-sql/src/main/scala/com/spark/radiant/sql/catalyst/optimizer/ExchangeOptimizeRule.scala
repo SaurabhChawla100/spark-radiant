@@ -30,7 +30,7 @@ object ExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
           case _ => false
         }
         if (repartitionExist.isEmpty) {
-          // TODO Add the intelligence in the rule for predicting secnarios where
+          // TODO Add the intelligence in the rule for predicting scenarios where
           //  this can be applied instead of all the aggregate present in join
           val updatedPlan = plan.transform {
             case join: Join if validJoinForExchangeOptRule(join.joinType) =>

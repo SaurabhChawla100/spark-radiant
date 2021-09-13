@@ -69,6 +69,11 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
     df = spark.createDataFrame(Seq((1, 1, 4), (1, 2, 5),
       (3, 3, 7))).toDF("test31", "test32", "test33")
     df.createOrReplaceTempView("testDf3")
+    // create the parquet datasource file
+    spark.createDataFrame(Seq((1, 1), (1, 2),
+      (2, 1), (2, 1), (2, 3), (3, 2), (3, 3), (3, 4), (4, 1), (3, 5))).toDF("test11", "test12").
+      repartition(1).write.mode("overwrite").
+      format("parquet").save("src/test/resources/TestExchangeOptParquet1")
 
     // adding Extra optimizer rule
     val sparkRadiantSqlApi = new SparkRadiantSqlApi()
@@ -82,7 +87,6 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
 
   override protected def afterAll(): Unit = {
     deleteDir("src/test/resources/TestExchangeOptParquet1")
-    deleteDir("src/test/resources/TestExchangeOptParquet2")
     spark.stop()
   }
 
@@ -220,4 +224,26 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
       executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
     assert(reuseExchange.isEmpty)
   }
+
+  test("test the UnionReuseExchangeOptimizeRule is applied for fileSourceScan") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.read.parquet("src/test/resources/TestExchangeOptParquet1").
+      createOrReplaceTempView("testDf1")
+    val df = spark.sql("select test11, count(*) as count from testDf1" +
+      " group by test11 union select test11, sum(test11) as count" +
+      " from testDf1 group by test11")
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{x =>
+      x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isDefined)
+    df.collect()
+    val executedPlan = df.queryExecution.executedPlan.transform {
+      case ad: AdaptiveSparkPlanExec => ad.executedPlan
+      case sh: ShuffleQueryStageExec => sh.plan
+      case ex => ex
+    }
+    val reuseExchange =
+      executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
+    assert(reuseExchange.nonEmpty)
+  }
+
 }

@@ -24,7 +24,7 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LocalRelation, LogicalPlan,
-  Repartition, RepartitionByExpression, Union}
+  Project, Repartition, RepartitionByExpression, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 
 /**
@@ -96,6 +96,9 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
       case LocalRelation(_, _, _)
            |  LogicalRelation(_, _, _, _)
            |  HiveTableRelation(_, _, _, _, _) => true
+      case Project(_, LocalRelation(_, _, _))
+           |  Project(_, LogicalRelation(_, _, _, _))
+           |  Project(_, HiveTableRelation(_, _, _, _, _)) => true
       case _ => false
     }
   }
@@ -117,14 +120,27 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     var optFlag = false
     if (leftPlan.getClass.equals(rightPlan.getClass)) {
       leftPlan match {
+        case Project(_, localRel@LocalRelation(_, _, _))
+          if rightPlan.asInstanceOf[Project].isInstanceOf[LocalRelation] =>
+          optFlag = (localRel.schema.fieldNames.toSet
+            == rightPlan.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
         case localRel@LocalRelation(_, _, _) =>
           optFlag = (localRel.schema.fieldNames.toSet
           == rightPlan.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
+        case Project(_, logRel@LogicalRelation(_, _, _, _))
+          if rightPlan.asInstanceOf[Project].child.isInstanceOf[LogicalRelation] =>
+          val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
+          val rightFiles = rightPlan.asInstanceOf[Project].child.asInstanceOf[LogicalRelation].
+            relation.asInstanceOf[HadoopFsRelation].inputFiles
+          optFlag = leftFiles.toSet == rightFiles.toSet
         case logRel@LogicalRelation(_, _, _, _) =>
           val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
           val rightFiles = rightPlan.asInstanceOf[LogicalRelation].
             relation.asInstanceOf[HadoopFsRelation].inputFiles
           optFlag = leftFiles.toSet == rightFiles.toSet
+        case Project(_, hiveRel@HiveTableRelation(_, _, _, _, _))
+          if rightPlan.asInstanceOf[Project].isInstanceOf[HiveTableRelation] =>
+          optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
         case hiveRel@HiveTableRelation(_, _, _, _, _) =>
           optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
         case _ =>
