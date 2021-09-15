@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftAnti, LeftOuter
   LeftSemi, RightOuter}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
+import org.apache.spark.sql.execution.columnar.InMemoryRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
 import org.apache.spark.sql.types.StringType
@@ -101,6 +102,8 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     val exprOut = planForDf match {
       case Filter(_, LocalRelation(output, _ ,_)) => output.map(_.exprId)
       case Filter(_, LogicalRelation(_, output ,_, _)) => output.map(_.exprId)
+      case Filter(_, HiveTableRelation(_, output ,_, _,_)) => output.map(_.exprId)
+      case Filter(_, InMemoryRelation(output, _, _)) => output.map(_.exprId)
       case _ => planForDf.output.map(_.exprId)
     }
     joinAttr.foreach { attr =>
@@ -222,6 +225,9 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case filter @ Filter(_, HiveTableRelation(_, _, _, _, _))  if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr, filter,
           predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
+      case filter @ Filter(_, InMemoryRelation(_, _, _)) if !hold =>
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+          filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           localTableScan, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
@@ -231,6 +237,9 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case hiveTableRelation: HiveTableRelation if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           hiveTableRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
+      case inMemoryRelation: InMemoryRelation if !hold =>
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+          inMemoryRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
     }
     logDebug(s"optimized DynamicFilteredPlan:: ${updatedDynamicFilteredPlan}")
     updatedDynamicFilteredPlan
@@ -242,13 +251,16 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     plan match {
       case Project(_, Filter(_, LocalRelation(_, _, _)))
            | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
-           |  Project(_, Filter(_, HiveTableRelation(_, _, _, _, _))) => true
+           | Project(_, Filter(_, HiveTableRelation(_, _, _, _, _)))
+           | Project(_, Filter(_, InMemoryRelation(_, _, _))) => true
       case Filter(_, LocalRelation(_, _, _))
            | Filter(_, LogicalRelation(_, _, _, _))
-           | Filter(_, HiveTableRelation(_, _, _, _, _)) => true
+           | Filter(_, HiveTableRelation(_, _, _, _, _))
+           | Filter(_, InMemoryRelation(_, _, _)) => true
       case LocalRelation(_, _, _)
-           |  LogicalRelation(_, _, _, _)
-           |  HiveTableRelation(_, _, _, _, _) => true
+           | LogicalRelation(_, _, _, _)
+           | HiveTableRelation(_, _, _, _, _)
+           | InMemoryRelation(_, _, _) => true
       case _ => false
     }
   }

@@ -106,6 +106,20 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     assert(updateDFPlan.isEmpty)
   }
 
+  test("test the Dynamic filter is applied to left side of the table for InMemoryRelation") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    val df1 = spark.createDataFrame(Seq((1, 1), (1, 2),
+      (2, 1), (2, 1), (2, 3), (3, 2), (3, 3))).toDF("test11", "test12")
+    df1.cache()
+    df1.createOrReplaceTempView("testDf1")
+    val df = spark.sql("select * from testDf1 a join testDf2 b on" +
+      " a.test11=b.test21 where b.test22=2")
+    val dfOptimizer = new SparkSqlDFOptimizerRule()
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{ x => x.isInstanceOf[TypedFilter] }
+    assert(updateDFPlan.isDefined)
+    assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+  }
+
   test("test the Dynamic filter is applied to left side of the table if its BHJ") {
     spark.sql("set spark.sql.use.dynamicfilter.bhj=true")
     val df = spark.sql("select * from testDf1 a join testDf2 b on" +
@@ -231,6 +245,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
       val dfAppliedSchema = fileSourceScanExec.schema.names.mkString(",")
       assert(dfAppliedSchema ===  expectedDFOutput)
     }
+    spark.sql("set spark.sql.dynamicfilter.comparejoinsides=false")
   }
 
   test("test the Dynamic filter is applied for right outer join") {
