@@ -18,9 +18,8 @@
 package com.spark.radiant.sql.catalyst.optimizer
 
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
-
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.execution.ProjectExec
 import org.apache.spark.sql.execution.joins.SortMergeJoinExec
 import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
@@ -28,8 +27,8 @@ import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.must.Matchers
-import scala.reflect.io.Directory
 
+import scala.reflect.io.Directory
 import java.io.File
 
 class SizeBasedJoinReorderSuite extends AnyFunSuite
@@ -136,7 +135,8 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
 
   test("test the Join reorder is applied when project is present") {
     spark.sql("set spark.sql.autoBroadcastJoinThreshold=15")
-    val df = spark.sql("select c.test31 from testDf1 a , testDf2 b ,testDf3 c where a.test11=b.test21" +
+    val df = spark.sql("select c.test31 from testDf1 a , testDf2 b ," +
+      "testDf3 c where a.test11=b.test21" +
       " and b.test22 = 2 and a.test11 = c.test31 and c.test33=7")
     var joinStrList : List[String] = List.empty
     df.queryExecution.sparkPlan.asInstanceOf[ProjectExec].child match {
@@ -155,4 +155,26 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
     assert(joinStrList.last == "org.apache.spark.sql.execution.joins.BroadcastHashJoinExec")
   }
 
+  test("test the Join reorder is applied when projection is present one one side only") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=15")
+    val df = spark.sql("select a.test11 from testDf1 a, testDf2 b, testDf3 c1," +
+      "testDf3 c where a.test11=b.test21 and a.test11 = c1.test31" +
+      " and b.test22 = 2 and a.test11 = c.test31 and c.test33=7")
+    var joinStrList : List[String] = List.empty
+    df.queryExecution.sparkPlan.asInstanceOf[ProjectExec].child match {
+      case smj: SortMergeJoinExec => assert(true)
+      case bhj: BroadcastHashJoinExec => assert(false)
+    }
+    df.queryExecution.sparkPlan.transform {
+      case smj: SortMergeJoinExec =>
+        joinStrList = joinStrList :+smj.getClass.getCanonicalName
+        smj
+      case bhj: BroadcastHashJoinExec =>
+        joinStrList = joinStrList :+ bhj.getClass.getCanonicalName
+        bhj
+    }
+    assert(joinStrList.head === "org.apache.spark.sql.execution.joins.SortMergeJoinExec")
+    assert(joinStrList.last === "org.apache.spark.sql.execution.joins.BroadcastHashJoinExec")
+    assert(df.collect() === Array(Row(3), Row(3)))
+  }
 }

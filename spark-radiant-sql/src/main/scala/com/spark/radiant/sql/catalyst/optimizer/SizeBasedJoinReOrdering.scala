@@ -51,7 +51,8 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
           case join: Join if validRightSide(join.right) && validChildForReOrder(join.left)
             && validJoinType(join.joinType) =>
             var leftPlan = join.left match {
-              case Project(_, child: Join) if validJoinType(child.joinType) => child
+              case proj@Project(_, child: Join) if validJoinType(child.joinType) =>
+                getValidProjectChildPlan(proj).asInstanceOf[Join]
               case join: Join => join
             }
             val rightPlan = join.right
@@ -120,6 +121,31 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
       case Project(_, child: Join) => true
       case join: Join => true
       case _ => false
+    }
+  }
+
+  private def getValidProjectChildPlan(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case Project(attr, child: Join) if !child.left.isInstanceOf[Project] &&
+        !child.right.isInstanceOf[Project] =>
+        val rightOutputSet = child.right.output.map(x => x.exprId)
+        val leftOutputSet = child.left.output.map(x => x.exprId)
+        val leftAttr = attr.filter(x =>
+          leftOutputSet.contains(x.asInstanceOf[AttributeReference].exprId))
+        val rightAttr = attr.filter(x =>
+          rightOutputSet.contains(x.asInstanceOf[AttributeReference].exprId))
+        if (leftAttr.nonEmpty && rightAttr.nonEmpty) {
+          child.copy(left = Project(leftAttr, child.left),
+            right = Project(rightAttr, child.right))
+        } else if (leftAttr.isEmpty && rightAttr.nonEmpty) {
+          child.copy(right = Project(rightAttr, child.right))
+        } else if (leftAttr.nonEmpty && rightAttr.isEmpty) {
+          child.copy(left = Project(leftAttr, child.left))
+        } else {
+          child
+        }
+      case Project(_, child: Join) =>
+        child
     }
   }
 

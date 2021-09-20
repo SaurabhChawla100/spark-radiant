@@ -21,6 +21,23 @@ The number of records involved in the join is reduced as the result of using the
 reduces the system resource requirements since the number of tasks spawned for the Join operation is reduced.
 This results in the completion of jobs with lower number of resources.
 
+````
+
+Regular Join                               |    SizeBasedJoinReordering
+                                           |
+                                           |  
+                                           |
+                     BHJ Join              |                SMJ Join 
+                     /     \               |                /     \
+                SMJ Join   Filter          |           BHJ Join    Filter
+                 /  \           \          |             /  \          \   
+            Table1    Table2   Table3      |         Table1  Table3    Table2 
+
+
+
+````
+
+
 ## Regular Join
 
 ```
