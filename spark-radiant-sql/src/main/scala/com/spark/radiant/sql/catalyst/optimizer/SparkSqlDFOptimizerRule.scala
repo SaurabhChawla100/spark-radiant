@@ -27,6 +27,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.execution.columnar.InMemoryRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Column, DataFrame, Dataset, SparkSession}
@@ -104,6 +105,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case Filter(_, LogicalRelation(_, output ,_, _)) => output.map(_.exprId)
       case Filter(_, HiveTableRelation(_, output ,_, _,_)) => output.map(_.exprId)
       case Filter(_, InMemoryRelation(output, _, _)) => output.map(_.exprId)
+      case Filter(_, DataSourceV2ScanRelation(_, _ , output)) => output.map(_.exprId)
       case _ => planForDf.output.map(_.exprId)
     }
     joinAttr.foreach { attr =>
@@ -216,16 +218,11 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           hold = true
         }
         typeFilter
-      case filter @ Filter(_, LocalRelation(_, _, _)) if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
-          filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
-      case filter @ Filter(_, LogicalRelation(_, _, _, _))  if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr, filter,
-          predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
-      case filter @ Filter(_, HiveTableRelation(_, _, _, _, _))  if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr, filter,
-          predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
-      case filter @ Filter(_, InMemoryRelation(_, _, _)) if !hold =>
+      case filter@Filter(_, LocalRelation(_, _, _)
+           | LogicalRelation(_, _, _, _)
+           | HiveTableRelation(_, _, _, _, _)
+           | DataSourceV2ScanRelation(_, _, _)
+           | InMemoryRelation(_, _, _)) if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
@@ -237,6 +234,9 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case hiveTableRelation: HiveTableRelation if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           hiveTableRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
+      case dataSourceV2ScanRelation: DataSourceV2ScanRelation if !hold =>
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+          dataSourceV2ScanRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case inMemoryRelation: InMemoryRelation if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           inMemoryRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
@@ -252,14 +252,17 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case Project(_, Filter(_, LocalRelation(_, _, _)))
            | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
            | Project(_, Filter(_, HiveTableRelation(_, _, _, _, _)))
+           | Project(_, Filter(_, DataSourceV2ScanRelation(_, _, _)))
            | Project(_, Filter(_, InMemoryRelation(_, _, _))) => true
       case Filter(_, LocalRelation(_, _, _))
            | Filter(_, LogicalRelation(_, _, _, _))
            | Filter(_, HiveTableRelation(_, _, _, _, _))
+           | Filter(_, DataSourceV2ScanRelation(_, _, _))
            | Filter(_, InMemoryRelation(_, _, _)) => true
       case LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
            | HiveTableRelation(_, _, _, _, _)
+           | DataSourceV2ScanRelation(_, _, _)
            | InMemoryRelation(_, _, _) => true
       case _ => false
     }

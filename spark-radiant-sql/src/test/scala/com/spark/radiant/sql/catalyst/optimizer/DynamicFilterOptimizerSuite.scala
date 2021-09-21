@@ -21,12 +21,12 @@ import scala.reflect.io.Directory
 import java.io.File
 
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
-
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.TypedFilter
 import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
@@ -286,5 +286,22 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     val updateDFPlan = df.queryExecution.optimizedPlan.find{ x => x.isInstanceOf[TypedFilter] }
     assert(updateDFPlan.isDefined)
     assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+  }
+
+  test("test Dynamic filter is applied to DataSourceV2 Relation") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+
+    spark.read.parquet("src/test/resources/Testparquet1").createOrReplaceTempView("testDf1")
+    spark.read.parquet("src/test/resources/Testparquet2").createOrReplaceTempView("testDf2")
+
+    val df = spark.sql("select a.test11 from testDf1 a join testDf2 b on" +
+      " a.test11=b.test21 where b.test22=2 and b.test23=5")
+    val dfOptimizer = new SparkSqlDFOptimizerRule()
+    val updateDFPlan = df.queryExecution.optimizedPlan.find { x => x.isInstanceOf[TypedFilter] }
+    assert(updateDFPlan.isDefined)
+    assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+    assert(df.collect() === Array(Row(1), Row(1)))
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
   }
 }

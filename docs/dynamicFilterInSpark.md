@@ -166,3 +166,4 @@ or
 
 
 Note - Will add few more optimization in near future.
+1) Add the support for Pushdown Dynamic filter to DataSourceV2ScanRelation.
