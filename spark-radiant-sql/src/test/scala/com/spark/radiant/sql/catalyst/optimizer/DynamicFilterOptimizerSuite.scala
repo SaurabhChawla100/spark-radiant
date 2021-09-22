@@ -21,11 +21,14 @@ import scala.reflect.io.Directory
 import java.io.File
 
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.TypedFilter
 import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
+import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.must.Matchers
@@ -40,7 +43,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
   with Matchers
   with BeforeAndAfterAll
   with BeforeAndAfterEach {
-  def createSparkSession(sparkConf: SparkConf) : SparkSession = {
+  def createSparkSession(sparkConf: SparkConf): SparkSession = {
     val spark = SparkSession
       .builder()
       .master("local[2]")
@@ -51,6 +54,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
 
   var spark: SparkSession = null
   var sparkConf: SparkConf = null
+
   protected def sparkContext = spark.sparkContext
 
   override protected def beforeAll(): Unit = {
@@ -68,7 +72,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     df = spark.createDataFrame(Seq((1, 1, 4), (1, 2, 5),
       (3, 3, 7))).toDF("test31", "test32", "test33")
     df.createOrReplaceTempView("testDf3")
-   // create the parquet datasource file
+    // create the parquet datasource file
     spark.createDataFrame(Seq((1, 1), (1, 2),
       (2, 1), (2, 1), (2, 3), (3, 2), (3, 3), (3, 4), (4, 1), (3, 5))).toDF("test11", "test12").
       repartition(1).write.mode("overwrite").
@@ -88,6 +92,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     val directory = new Directory(new File(path))
     directory.deleteRecursively()
   }
+
   override protected def afterAll(): Unit = {
     deleteDir("src/test/resources/Testparquet1")
     deleteDir("src/test/resources/Testparquet2")
@@ -95,8 +100,8 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
   }
 
   test("test SparkSession is working") {
-    val u = sparkContext.parallelize(1 to 2).map{x => x}.sum
-    assert(u==3)
+    val u = sparkContext.parallelize(1 to 2).map{ x => x }.sum
+    assert(u === 3)
   }
 
   test("test the Dynamic filter is not applied to left side of the table if its BHJ") {
@@ -211,7 +216,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     if (fileScan.isDefined) {
       val pushedFilter = fileScan.get.asInstanceOf[FileSourceScanExec].metadata.get("PushedFilters")
       val expected = "Some([IsNotNull(test21), In(test21, [1,3])])"
-      assert(pushedFilter.toString ===  expected)
+      assert(pushedFilter.toString === expected)
     }
   }
 
@@ -240,10 +245,10 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
       val pushedFilter = fileSourceScanExec.metadata.get("PushedFilters")
       val expected = "Some([IsNotNull(test22)," +
         " EqualTo(test22,2), IsNotNull(test21), In(test21, [1,2,3,4])])"
-      assert(pushedFilter.toString ===  expected)
+      assert(pushedFilter.toString === expected)
       val expectedDFOutput = "test21,test22,test23"
       val dfAppliedSchema = fileSourceScanExec.schema.names.mkString(",")
-      assert(dfAppliedSchema ===  expectedDFOutput)
+      assert(dfAppliedSchema === expectedDFOutput)
     }
     spark.sql("set spark.sql.dynamicfilter.comparejoinsides=false")
   }
@@ -301,7 +306,23 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     val updateDFPlan = df.queryExecution.optimizedPlan.find { x => x.isInstanceOf[TypedFilter] }
     assert(updateDFPlan.isDefined)
     assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
-    assert(df.collect() === Array(Row(1), Row(1)))
-    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
+    // test pushDown dynamic filter
+    val executedPlan = df.queryExecution.executedPlan
+    val leaves = executedPlan match {
+      case adaptive: AdaptiveSparkPlanExec => adaptive.executedPlan.collectLeaves()
+      case other => other.collectLeaves()
+    }
+    val batchScan = leaves.find(_.isInstanceOf[BatchScanExec])
+    if (batchScan.isDefined) {
+      val batchScanExec = batchScan.get.asInstanceOf[BatchScanExec]
+      val pushedFilter = batchScanExec.scan.asInstanceOf[ParquetScan].pushedFilters
+      val expected = "IsNotNull(test11), EqualTo(test11,1)"
+      assert(pushedFilter.mkString(", ") === expected)
+      val expectedDFOutput = "test11"
+      val dfAppliedSchema = batchScanExec.schema.names.mkString(",")
+      assert(dfAppliedSchema === expectedDFOutput)
+      assert(df.collect() === Array(Row(1), Row(1)))
+      spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
+    }
   }
 }

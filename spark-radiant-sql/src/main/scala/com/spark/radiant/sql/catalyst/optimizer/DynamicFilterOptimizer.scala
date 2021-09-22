@@ -35,6 +35,8 @@ object DynamicFilterOptimizer extends Rule[LogicalPlan] {
           val df = sqlUtils.createDfFromLogicalPlan(spark, updatedPlan)
           val dfOptimizer = new SparkSqlDFOptimizerRule()
           updatedPlan = dfOptimizer.pushFilterBelowTypedFilterRule(df.queryExecution.optimizedPlan)
+          // push down filter to V2Scan
+          updatedPlan = dfOptimizer.pushDownFilterToV2Scan(updatedPlan)
         }
         updatedPlan
       } else {

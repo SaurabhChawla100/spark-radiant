@@ -17,6 +17,8 @@
 
 package com.spark.radiant.sql.catalyst.optimizer
 
+import com.spark.radiant.sql.utils.SparkSqlUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
@@ -28,9 +30,12 @@ import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, 
 import org.apache.spark.sql.execution.columnar.InMemoryRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
+import org.apache.spark.sql.execution.datasources.v2.orc.OrcScan
+import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
+import org.apache.spark.sql.sources.{Filter => V2Filter}
 import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.{Column, DataFrame, Dataset, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, SparkSession}
 
 private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   val bloomFilterKey = "dynamicFilterBloomFilterKey"
@@ -361,6 +366,50 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           case _ => filter
         }
         updatedFilterPlan
+    }
+  }
+
+  /**
+   *
+   * This method pushes the Filter to FileScan for V2 data sources.
+   * Dynamic filter is pushed down to Parquet and ORC for V2 dataSource
+   */
+  def pushDownFilterToV2Scan(plan: LogicalPlan) : LogicalPlan = {
+    try {
+      plan.transform {
+        case filter@Filter(_, v2Scan@DataSourceV2ScanRelation(_, scan, _)) =>
+          // Push down filter to orc/ parquet
+          val existingPushedFilter = scan match {
+            case parquet: ParquetScan => parquet.pushedFilters
+            case orc: OrcScan => orc.pushedFilters
+            case _ => Array.empty
+          }
+          var filterToAdd: List[V2Filter] = List.empty
+          val utils = new SparkSqlUtils()
+          val convertedSourcesFilter = utils.invokeObjectTranslateFilterMethod(
+            "org.apache.spark.sql.execution.datasources.DataSourceStrategy",
+            "translateFilter", filter.condition, true)
+          val updatedFilter: List[V2Filter] =
+            utils.getSplitByAndFilter(convertedSourcesFilter)
+          if (existingPushedFilter.nonEmpty && updatedFilter.nonEmpty) {
+            filterToAdd = updatedFilter.filter(x => !existingPushedFilter.contains(x))
+            filterToAdd = existingPushedFilter.toList ++ filterToAdd
+            val updatedScan = v2Scan.scan match {
+              case parquet: ParquetScan =>
+                parquet.copy(pushedFilters = filterToAdd.toArray)
+              case orc: OrcScan =>
+                orc.copy(pushedFilters = filterToAdd.toArray)
+              case scan => scan
+            }
+            filter.copy(child = v2Scan.copy(scan = updatedScan))
+          } else {
+            filter
+          }
+      }
+    } catch {
+      case ex: AnalysisException =>
+        logDebug(s"exception while creating pushDownFilterToV2Scan: $ex")
+        plan
     }
   }
 

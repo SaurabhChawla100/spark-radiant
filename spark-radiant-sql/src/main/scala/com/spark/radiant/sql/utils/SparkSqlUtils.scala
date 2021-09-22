@@ -29,6 +29,9 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream, FileSystem, Path}
+import org.apache.spark.sql.sources.{Filter => V2Filter}
+
+import scala.reflect.runtime.{universe => ru}
 
 /**
  * SparkSqlUtils utility class
@@ -125,6 +128,41 @@ private[sql] class SparkSqlUtils extends Serializable {
     } catch {
       case ex: Exception =>
         throw ex
+    }
+  }
+
+  /**
+   * Helper method to invoke TranslateFilterMethod of DataSourceStrategy
+   */
+  def invokeObjectTranslateFilterMethod(objectName: String,
+     methodName: String,
+     filterExp: AnyRef, supportNestedPredicatePushdown: Boolean): V2Filter = {
+    try {
+      val rm = scala.reflect.runtime.currentMirror
+      val moduleSymbol = rm.staticModule(objectName)
+      val classSymbol = moduleSymbol.moduleClass.asClass
+      val moduleMirror = rm.reflectModule(moduleSymbol)
+      val objectInstance = moduleMirror.instance
+      val objectType = classSymbol.toType
+      val methodSymbol = objectType.decl(ru.TermName(methodName)).asMethod
+      val instanceMirror = rm.reflect(objectInstance)
+      val methodMirror = instanceMirror.reflectMethod(methodSymbol)
+      val output = methodMirror.apply(filterExp, supportNestedPredicatePushdown) match {
+        case Some(filterValue) => filterValue
+        case otherValue => otherValue
+      }
+      output.asInstanceOf[V2Filter]
+    } catch {
+      case ex: Exception =>
+        throw ex
+    }
+  }
+
+  def getSplitByAndFilter(filter: V2Filter): List[V2Filter] = {
+    filter match {
+      case org.apache.spark.sql.sources.And(cond1, cond2) =>
+        getSplitByAndFilter(cond1) ++ getSplitByAndFilter(cond2)
+      case other => (other :: Nil)
     }
   }
 }
