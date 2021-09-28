@@ -372,14 +372,15 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   /**
    *
    * This method pushes the Filter to FileScan for V2 data sources.
-   * Dynamic filter is pushed down to Parquet and ORC for V2 dataSource
+   * Dynamic filter is pushed down to Parquet and ORC for V2 dataSource.
+   * This will work with Spark-3.1.1 and later version of spark.
    */
   def pushDownFilterToV2Scan(plan: LogicalPlan) : LogicalPlan = {
     try {
       plan.transform {
-        case filter@Filter(_, v2Scan@DataSourceV2ScanRelation(_, scan, _)) =>
-          // Push down filter to orc/ parquet
-          val existingPushedFilter = scan match {
+        case filter@Filter(_, v2Scan: DataSourceV2ScanRelation) =>
+          // Push down filter to orc and parquet
+          val existingPushedFilter = v2Scan.scan match {
             case parquet: ParquetScan => parquet.pushedFilters
             case orc: OrcScan => orc.pushedFilters
             case _ => Array.empty
@@ -392,14 +393,16 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           val updatedFilter: List[V2Filter] =
             utils.getSplitByAndFilter(convertedSourcesFilter)
           if (existingPushedFilter.nonEmpty && updatedFilter.nonEmpty) {
-            filterToAdd = updatedFilter.filter(x => !existingPushedFilter.contains(x))
+            filterToAdd = updatedFilter.filter(!existingPushedFilter.contains(_))
             filterToAdd = existingPushedFilter.toList ++ filterToAdd
+            // TODO Add the support for Spark-3.0.x
             val updatedScan = v2Scan.scan match {
               case parquet: ParquetScan =>
                 parquet.copy(pushedFilters = filterToAdd.toArray)
               case orc: OrcScan =>
                 orc.copy(pushedFilters = filterToAdd.toArray)
-              case scan => scan
+              case scan =>
+                scan
             }
             filter.copy(child = v2Scan.copy(scan = updatedScan))
           } else {
@@ -407,7 +410,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           }
       }
     } catch {
-      case ex: AnalysisException =>
+      case ex: Throwable =>
         logDebug(s"exception while creating pushDownFilterToV2Scan: $ex")
         plan
     }
