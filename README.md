@@ -215,9 +215,12 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
 2) **spark-radiant-core** - This contains the optimization related to total cost optimization.
    
-   a) **Enhanced Autoscaling in Spark**- This is WIP
+   a) **Metrics Collector** - SparkJobMetricsCollector is used for collecting the important metrics to Spark Driver Memory,
+        Stage metrics, Task Metrics. This is enabled by using the configuration
+        --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector and providing the jars in the class path 
+        using --jars spark-radiant-core-1.0.3-SNAPSHOT.jar
    
-   b) **Metrics Collector** - This is WIP
+   b) **Enhanced Autoscaling in Spark**- This is WIP
 
 
 ### Bug reports / New Feature Request

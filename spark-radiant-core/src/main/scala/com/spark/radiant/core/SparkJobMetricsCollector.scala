@@ -64,22 +64,33 @@ class SparkJobMetricsCollector()
   }
 
   override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = {
-    val endTime = applicationEnd.time - startTime
-    logInfo(s"Total Time taken by Application:: $endTime ms")
-    val jobTime = jobInfoMap.map(info => info._2.jobEnd - info._2.jobStart).sum
-    val timeSpendInDriver = endTime - jobTime
-    logInfo(s"Time spend in the Driver:  $timeSpendInDriver ms")
-    val percentDriverTime = (timeSpendInDriver*100)/endTime
-    if (percentDriverTime > 25) {
-      logInfo(s"Percentage of time spend in the Driver: $percentDriverTime." +
-        s" Try adding more parallelism to the Spark job for Optimal Performance")
-    }
+    val completionTime = (applicationEnd.time - startTime)/1000
+    // scalastyle:off println
+    println("Spark-Radiant Metrics Collector")
+    println(s"Total Time taken by Application:: $completionTime sec")
+    showDriverMetrics(completionTime)
   }
 
   private def addSkewTaskInfo(): Unit = {
   }
 
   private def getSkewTaskInfo(): Unit = {
+  }
+
+  private def showDriverMetrics(completionTime: Long): Unit = {
+    val jobTime = (jobInfoMap.map(info => info._2.jobEnd - info._2.jobStart).sum)/1000
+    val timeSpendInDriver = (completionTime - jobTime)
+    // scalastyle:off println
+    println("Driver Metrics:")
+    println(s"Time spend in the Driver: $timeSpendInDriver sec")
+    val percentDriverTime = (timeSpendInDriver*100)/completionTime
+    // if the time spend in driver is greater than the 25% of total time
+    // and total time spend in driver greater than 5 min than recommend
+    // for adding more parallelism in the spark Application
+    if (percentDriverTime > 25 && timeSpendInDriver > 300) {
+      println(s"Percentage of time spend in the Driver: $percentDriverTime." +
+        s" Try adding more parallelism to the Spark job for Optimal Performance")
+    }
   }
 }
 
