@@ -56,13 +56,19 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
     sparkContext.setLogLevel("ERROR")
     var df = spark.createDataFrame(Seq((1, 1), (1, 2),
       (2, 1), (2, 1), (2, 3), (3, 2), (3, 3))).toDF("test11", "test12")
+    df.repartition(1).write.mode("overwrite").
+      format("parquet").save("src/test/resources/SBJRO/TestJoinReorderParquet1")
     df.createOrReplaceTempView("testDf1")
     df = spark.createDataFrame(Seq((1, 1, 4), (1, 2, 5),
       (2, 1, 6), (2, 1, 7), (2, 3, 8), (3, 2, 9),
       (3, 3, 7))).toDF("test21", "test22", "test23")
+    df.repartition(1).write.mode("overwrite").
+      format("parquet").save("src/test/resources/SBJRO/TestJoinReorderParquet2")
     df.createOrReplaceTempView("testDf2")
     df = spark.createDataFrame(Seq((1, 1, 4), (1, 2, 5),
       (3, 3, 7))).toDF("test31", "test32", "test33")
+    df.repartition(1).write.mode("overwrite").
+      format("parquet").save("src/test/resources/SBJRO/TestJoinReorderParquet3")
     df.createOrReplaceTempView("testDf3")
     spark.sql("set spark.sql.autoBroadcastJoinThreshold=30")
     // adding Extra optimizer rule
@@ -76,8 +82,9 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
   }
 
   override protected def afterAll(): Unit = {
-    deleteDir("src/test/resources/TestExchangeOptParquet1")
-    deleteDir("src/test/resources/TestExchangeOptParquet2")
+    deleteDir("src/test/resources/SBJRO/TestJoinReorderParquet1")
+    deleteDir("src/test/resources/SBJRO/TestJoinReorderParquet2")
+    deleteDir("src/test/resources/SBJRO/TestJoinReorderParquet3")
     spark.stop()
   }
 
@@ -176,5 +183,57 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
     assert(joinStrList.head === "org.apache.spark.sql.execution.joins.SortMergeJoinExec")
     assert(joinStrList.last === "org.apache.spark.sql.execution.joins.BroadcastHashJoinExec")
     assert(df.collect() === Array(Row(3), Row(3)))
+  }
+
+  test("test the Join reorder applied for BHJ is applied before the SMJ for dataSourceV2") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=500")
+    spark.sql("set spark.sql.support.sizebased.join.reorder=true")
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+
+    spark.read.parquet("src/test/resources/SBJRO/TestJoinReorderParquet1")
+      .createOrReplaceTempView("testDf1")
+    spark.read.parquet("src/test/resources/SBJRO/TestJoinReorderParquet2")
+      .createOrReplaceTempView("testDf2")
+    spark.read.parquet("src/test/resources/SBJRO/TestJoinReorderParquet3")
+      .createOrReplaceTempView("testDf3")
+    val df = spark.sql("select * from testDf1 a , testDf2 b ,testDf3 c where a.test11=b.test21" +
+      " and b.test22 = 2 and a.test11 = c.test31 and c.test33=7")
+    df.queryExecution.sparkPlan match {
+      case _: SortMergeJoinExec => assert(true)
+      case _: BroadcastHashJoinExec => assert(false)
+    }
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
+  }
+
+  test("test the Join reorder is applied when project is present for dataSourceV2") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=700")
+    spark.sql("set spark.sql.support.sizebased.join.reorder=true")
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+
+    spark.read.parquet("src/test/resources/SBJRO/TestJoinReorderParquet1")
+      .createOrReplaceTempView("testDf1")
+    spark.read.parquet("src/test/resources/SBJRO/TestJoinReorderParquet2")
+      .createOrReplaceTempView("testDf2")
+    spark.read.parquet("src/test/resources/SBJRO/TestJoinReorderParquet3")
+      .createOrReplaceTempView("testDf3")
+    val df = spark.sql("select c.test31 from testDf1 a , testDf2 b ," +
+      "testDf3 c where a.test11=b.test21" +
+      " and b.test22 = 2 and a.test11 = c.test31 and c.test33=7")
+    var joinStrList : List[String] = List.empty
+    df.queryExecution.sparkPlan.asInstanceOf[ProjectExec].child match {
+      case _: SortMergeJoinExec => assert(true)
+      case _: BroadcastHashJoinExec => assert(false)
+    }
+    df.queryExecution.sparkPlan.transform {
+      case smj: SortMergeJoinExec =>
+        joinStrList = joinStrList :+smj.getClass.getCanonicalName
+        smj
+      case bhj: BroadcastHashJoinExec =>
+        joinStrList = joinStrList :+ bhj.getClass.getCanonicalName
+        bhj
+    }
+    assert(joinStrList.head == "org.apache.spark.sql.execution.joins.SortMergeJoinExec")
+    assert(joinStrList.last == "org.apache.spark.sql.execution.joins.BroadcastHashJoinExec")
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
   }
 }

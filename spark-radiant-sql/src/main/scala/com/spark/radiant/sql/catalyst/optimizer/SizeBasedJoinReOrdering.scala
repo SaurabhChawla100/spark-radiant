@@ -24,6 +24,7 @@ import org.apache.spark.sql.catalyst.plans.{Inner, JoinType}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 
 /**
  * SizeBasedJoinReOrdering - Spark-Radiant SizeBasedJoinReOrdering works well for the
@@ -98,13 +99,16 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
     plan match {
       case Project(_, Filter(_, LocalRelation(_, _, _)))
            | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
-           |  Project(_, Filter(_, HiveTableRelation(_, _, _, _, _))) => true
+           | Project(_, Filter(_, HiveTableRelation(_, _, _, _, _)))
+           | Project(_, Filter(_, DataSourceV2ScanRelation(_, _, _)))=> true
       case Filter(_, LocalRelation(_, _, _))
            | Filter(_, LogicalRelation(_, _, _, _))
-           | Filter(_, HiveTableRelation(_, _, _, _, _)) => true
+           | Filter(_, HiveTableRelation(_, _, _, _, _))
+           | Filter(_, DataSourceV2ScanRelation(_, _, _)) => true
       case LocalRelation(_, _, _)
-           |  LogicalRelation(_, _, _, _)
-           |  HiveTableRelation(_, _, _, _, _) => true
+           | LogicalRelation(_, _, _, _)
+           | HiveTableRelation(_, _, _, _, _)
+           | DataSourceV2ScanRelation(_, _, _) => true
       case _ => false
     }
   }
@@ -118,8 +122,8 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
 
   private def validChildForReOrder(plan: LogicalPlan): Boolean = {
     plan match {
-      case Project(_, child: Join) => true
-      case join: Join => true
+      case Project(_, _: Join) => true
+      case _: Join => true
       case _ => false
     }
   }

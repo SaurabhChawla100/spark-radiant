@@ -29,12 +29,12 @@ Regular Join                               |    SizeBasedJoinReordering
                                            |
                      BHJ Join              |                SMJ Join 
                      /     \               |                /     \
-                SMJ Join   Filter          |           BHJ Join    Filter
-                 /  \           \          |             /  \          \   
-            Table1    Table2   Table3      |         Table1  Table3    Table2 
-
-
-
+                SMJ Join   Filter          |           BHJ Join   Table2 
+                 /  \           \          |             /  \        
+            Table1    Table2   Table3      |         Table1  Filter
+                                           |                   \
+                                           |                   Table3  
+                                           |
 ````
 
 
