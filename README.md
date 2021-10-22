@@ -222,7 +222,6 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    
    b) **Enhanced Autoscaling in Spark**- This is WIP
 
-
 ### Bug reports / New Feature Request
 
 You can raise new feature request and Bug on this [issuelink](https://github.com/SaurabhChawla100/spark-radiant/issues).

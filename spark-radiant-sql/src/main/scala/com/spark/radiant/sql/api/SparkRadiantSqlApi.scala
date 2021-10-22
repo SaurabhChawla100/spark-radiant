@@ -21,10 +21,9 @@ import com.spark.radiant.sql.catalyst.optimizer.SparkSqlDFOptimizerRule
 import com.spark.radiant.sql.utils.SparkSqlUtils
 
 import java.util.concurrent.TimeUnit
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions}
 
 /**
  * SparkRadiantSqlApi having list of methods that are exposed to users
@@ -143,5 +142,24 @@ class SparkRadiantSqlApi extends Logging with Serializable {
         com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
         com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
       )
+  }
+}
+
+/**
+ * SparkRadiantSqlExtension - Inject the extra Optimizations rule
+ * --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
+ */
+class SparkRadiantSqlExtension extends (SparkSessionExtensions => Unit) {
+  def apply(sparkExt : SparkSessionExtensions): Unit = {
+    // inject the extra Optimizer rule
+    val seqRule = Seq(com.spark.radiant.sql.catalyst.optimizer.SizeBasedJoinReOrdering,
+      com.spark.radiant.sql.catalyst.optimizer.UnionReuseExchangeOptimizeRule,
+      com.spark.radiant.sql.catalyst.optimizer.ExchangeOptimizeRule,
+      com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
+      com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
+    )
+    seqRule.foreach { rule =>
+      sparkExt.injectOptimizerRule(_ => rule)
+    }
   }
 }

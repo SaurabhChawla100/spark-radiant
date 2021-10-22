@@ -117,6 +117,20 @@ using --packages -> for jars(spark-radiant-sql-1.0.2.jar, spark-radiant-core-1.0
 ```
 
 ### 1) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
+```
+./bin/spark-shell
+ --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+ --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
+
+./bin/spark-submit
+--packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+--class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
+--conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
+
+```
+
+
+### 2) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
 
 ```
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
@@ -137,7 +151,7 @@ df3.show()
 
 ```
 
-### 2) Create the optimized DataFrame from the existing Dataframe
+### 3) Create the optimized DataFrame from the existing Dataframe
 Use the below code to create the optimized data frame.
 ```
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
@@ -148,7 +162,7 @@ val sparkRadiantSqlApi = new SparkRadiantSqlApi()
 val df3 = sparkRadiantSqlApi.optimizeDataFrame(sparkSession, df2)
 ```
 
-### 3) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark in pyspark
+### 4) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark in pyspark
 
 ```
 ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
