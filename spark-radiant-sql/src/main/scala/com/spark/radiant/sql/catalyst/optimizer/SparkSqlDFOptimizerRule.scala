@@ -375,7 +375,8 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
    * Dynamic filter is pushed down to Parquet and ORC for V2 dataSource.
    * This will work with Spark-3.1.1 and later version of spark.
    */
-  def pushDownFilterToV2Scan(plan: LogicalPlan) : LogicalPlan = {
+  def pushDownFilterToV2Scan(plan: LogicalPlan)
+     (implicit spark: SparkSession) : LogicalPlan = {
     try {
       plan.transform {
         case filter@Filter(_, v2Scan: DataSourceV2ScanRelation) =>
@@ -387,24 +388,36 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           }
           var filterToAdd: List[V2Filter] = List.empty
           val utils = new SparkSqlUtils()
-          val convertedSourcesFilter = utils.invokeObjectTranslateFilterMethod(
-            "org.apache.spark.sql.execution.datasources.DataSourceStrategy",
-            "translateFilter", filter.condition, true)
-          val updatedFilter: List[V2Filter] =
-            utils.getSplitByAndFilter(convertedSourcesFilter)
-          if (existingPushedFilter.nonEmpty && updatedFilter.nonEmpty) {
-            filterToAdd = updatedFilter.filter(!existingPushedFilter.contains(_))
-            filterToAdd = existingPushedFilter.toList ++ filterToAdd
-            // TODO Add the support for Spark-3.0.x
-            val updatedScan = v2Scan.scan match {
-              case parquet: ParquetScan =>
-                parquet.copy(pushedFilters = filterToAdd.toArray)
-              case orc: OrcScan =>
-                orc.copy(pushedFilters = filterToAdd.toArray)
-              case scan =>
-                scan
+          val v2DeterministicPushdown = spark.sparkContext.getConf.getBoolean(
+            "spark.sql.dynamicFilter.v2pushdown.deterministic", true)
+          val pushDownFilter = if (v2DeterministicPushdown) {
+            getSplittedByAndPredicates(filter.condition).filter(_.deterministic)
+          } else {
+            getSplittedByAndPredicates(filter.condition)
+          }
+          if (pushDownFilter.nonEmpty) {
+            val pushDownCond = pushDownFilter.reduceLeft(And)
+            val convertedSourcesFilter = utils.invokeObjectTranslateFilterMethod(
+              "org.apache.spark.sql.execution.datasources.DataSourceStrategy",
+              "translateFilter", pushDownCond, true)
+            val updatedFilter: List[V2Filter] =
+              utils.getSplitByAndFilter(convertedSourcesFilter)
+            if (existingPushedFilter.nonEmpty && updatedFilter.nonEmpty) {
+              filterToAdd = updatedFilter.filter(!existingPushedFilter.contains(_))
+              filterToAdd = existingPushedFilter.toList ++ filterToAdd
+              // TODO Add the support for Spark-3.0.x
+              val updatedScan = v2Scan.scan match {
+                case parquet: ParquetScan =>
+                  parquet.copy(pushedFilters = filterToAdd.toArray)
+                case orc: OrcScan =>
+                  orc.copy(pushedFilters = filterToAdd.toArray)
+                case scan =>
+                  scan
+              }
+              filter.copy(child = v2Scan.copy(scan = updatedScan))
+            } else {
+              filter
             }
-            filter.copy(child = v2Scan.copy(scan = updatedScan))
           } else {
             filter
           }

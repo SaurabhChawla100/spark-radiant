@@ -100,7 +100,7 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
       case Project(_, Filter(_, LocalRelation(_, _, _)))
            | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
            | Project(_, Filter(_, HiveTableRelation(_, _, _, _, _)))
-           | Project(_, Filter(_, DataSourceV2ScanRelation(_, _, _)))=> true
+           | Project(_, Filter(_, DataSourceV2ScanRelation(_, _, _))) => true
       case Filter(_, LocalRelation(_, _, _))
            | Filter(_, LogicalRelation(_, _, _, _))
            | Filter(_, HiveTableRelation(_, _, _, _, _))

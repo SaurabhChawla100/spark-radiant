@@ -117,20 +117,6 @@ using --packages -> for jars(spark-radiant-sql-1.0.2.jar, spark-radiant-core-1.0
 ```
 
 ### 1) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
-```
-./bin/spark-shell
- --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
- --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
-
-./bin/spark-submit
---packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
---class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
---conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
-
-```
-
-
-### 2) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
 
 ```
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
@@ -140,18 +126,9 @@ sparkRadiantSqlApi.addOptimizerRule(spark)
 val df3 = df1.join(df2, Seq("joinCnd"), "inner")
 // df3 will have the dynamic filter
 df3.show()
-
-or 
-
-// Importing the extra Optimizations rule
-spark.experimental.extraOptimizations=Seq(com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer)
-val df3 = df1.join(df2, Seq("joinCnd"), "inner")
-// df3 will have the dynamic filter
-df3.show()
-
 ```
 
-### 3) Create the optimized DataFrame from the existing Dataframe
+### 2) Create the optimized DataFrame from the existing Dataframe
 Use the below code to create the optimized data frame.
 ```
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
@@ -162,7 +139,7 @@ val sparkRadiantSqlApi = new SparkRadiantSqlApi()
 val df3 = sparkRadiantSqlApi.optimizeDataFrame(sparkSession, df2)
 ```
 
-### 4) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark in pyspark
+### 3) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark in pyspark
 
 ```
 ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
@@ -180,6 +157,18 @@ or
 >>> df3.show()
 ```
 
+### 4) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
+```
+./bin/spark-shell
+ --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+ --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
+
+./bin/spark-submit
+--packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+--class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
+--conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
+
+```
 
 Note - Will add few more optimization in near future.
 1) Add the support for the Pushdown for v2 Datasource for spark-3.0.x
