@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.execution.columnar.InMemoryRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.orc.OrcScan
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
@@ -111,6 +111,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       case Filter(_, HiveTableRelation(_, output ,_, _,_)) => output.map(_.exprId)
       case Filter(_, InMemoryRelation(output, _, _)) => output.map(_.exprId)
       case Filter(_, DataSourceV2ScanRelation(_, _ , output)) => output.map(_.exprId)
+      case Filter(_, DataSourceV2Relation(_, output, _, _, _)) => output.map(_.exprId)
       case _ => planForDf.output.map(_.exprId)
     }
     joinAttr.foreach { attr =>
@@ -230,6 +231,11 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
            | InMemoryRelation(_, _, _)) if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
+      // For supporting the DataSourceV2 when this rule is added as the part
+      // of spark.sql.extensions
+      case filter@Filter(_, DataSourceV2Relation(_,_,_,_,_)) if !hold =>
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+          filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           localTableScan, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
@@ -258,16 +264,19 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
            | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
            | Project(_, Filter(_, HiveTableRelation(_, _, _, _, _)))
            | Project(_, Filter(_, DataSourceV2ScanRelation(_, _, _)))
+           | Project(_, Filter(_, DataSourceV2Relation(_, _, _, _, _)))
            | Project(_, Filter(_, InMemoryRelation(_, _, _))) => true
       case Filter(_, LocalRelation(_, _, _))
            | Filter(_, LogicalRelation(_, _, _, _))
            | Filter(_, HiveTableRelation(_, _, _, _, _))
            | Filter(_, DataSourceV2ScanRelation(_, _, _))
+           | Filter(_, DataSourceV2Relation(_, _, _, _, _))
            | Filter(_, InMemoryRelation(_, _, _)) => true
       case LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
            | HiveTableRelation(_, _, _, _, _)
            | DataSourceV2ScanRelation(_, _, _)
+           | DataSourceV2Relation(_, _, _, _, _)
            | InMemoryRelation(_, _, _) => true
       case _ => false
     }

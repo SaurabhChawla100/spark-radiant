@@ -59,6 +59,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
 
   override protected def beforeAll(): Unit = {
     sparkConf = new SparkConf()
+    // sparkConf.set("spark.sql.extensions", "com.spark.radiant.sql.api.SparkRadiantSqlExtension")
     spark = createSparkSession(sparkConf)
     spark.sql("set spark.sql.support.dynamicfilter=true")
     sparkContext.setLogLevel("ERROR")
@@ -216,7 +217,8 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
     if (fileScan.isDefined) {
       val pushedFilter = fileScan.get.asInstanceOf[FileSourceScanExec].metadata.get("PushedFilters")
       val expected = "Some([IsNotNull(test21), In(test21, [1,3])])"
-      assert(pushedFilter.toString === expected)
+      val expected1 = "Some([In(test21, [1,3]), IsNotNull(test21)])"
+      assert(pushedFilter.toString === expected || pushedFilter.toString === expected1)
     }
   }
 
@@ -245,7 +247,9 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
       val pushedFilter = fileSourceScanExec.metadata.get("PushedFilters")
       val expected = "Some([IsNotNull(test22)," +
         " EqualTo(test22,2), IsNotNull(test21), In(test21, [1,2,3,4])])"
-      assert(pushedFilter.toString === expected)
+      val expectedPattern = "Some([IsNotNull(test22), EqualTo(test22,2)," +
+        " In(test21, [1,2,3,4]), IsNotNull(test21)])"
+      assert(pushedFilter.toString === expected || pushedFilter.toString === expectedPattern)
       val expectedDFOutput = "test21,test22,test23"
       val dfAppliedSchema = fileSourceScanExec.schema.names.mkString(",")
       assert(dfAppliedSchema === expectedDFOutput)
@@ -320,7 +324,7 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
       assert(pushedFilter.mkString(", ") === expected)
       val expectedDFOutput = "test11"
       val dfAppliedSchema = batchScanExec.schema.names.mkString(",")
-      assert(dfAppliedSchema === expectedDFOutput)
+      assert(dfAppliedSchema.contains(expectedDFOutput))
       assert(df.collect() === Array(Row(1), Row(1)))
       spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
     }
