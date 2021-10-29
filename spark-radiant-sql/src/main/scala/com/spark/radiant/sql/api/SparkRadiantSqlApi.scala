@@ -23,13 +23,23 @@ import com.spark.radiant.sql.utils.SparkSqlUtils
 import java.util.concurrent.TimeUnit
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.sparkRadiantUtil.SparkSqlUtil
 
 /**
  * SparkRadiantSqlApi having list of methods that are exposed to users
  */
 
 class SparkRadiantSqlApi extends Logging with Serializable {
+
+  private[api] val seqRule: Seq[Rule[LogicalPlan]] =
+    Seq(com.spark.radiant.sql.catalyst.optimizer.SizeBasedJoinReOrdering,
+    com.spark.radiant.sql.catalyst.optimizer.UnionReuseExchangeOptimizeRule,
+    com.spark.radiant.sql.catalyst.optimizer.ExchangeOptimizeRule,
+    com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
+    com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
+  )
 
   /**
    *
@@ -135,13 +145,16 @@ class SparkRadiantSqlApi extends Logging with Serializable {
    */
   def addOptimizerRule(spark: SparkSession): Unit = {
     // Importing the extra Optimizations rule
-    spark.experimental.extraOptimizations =
-      Seq(com.spark.radiant.sql.catalyst.optimizer.SizeBasedJoinReOrdering,
-        com.spark.radiant.sql.catalyst.optimizer.UnionReuseExchangeOptimizeRule,
-        com.spark.radiant.sql.catalyst.optimizer.ExchangeOptimizeRule,
-        com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
-        com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
-      )
+    spark.experimental.extraOptimizations = seqRule
+  }
+
+  /**
+   *  Api call for adding the optimizer rule in the extendedOperatorOptimizationRules
+   * @param spark - existing sparkSession
+   */
+  def addOptimizerRuleInSqlExt(spark: SparkSession): Unit = {
+    // Importing the extra Optimizations rule in extendedOperatorOptimizationRules
+    SparkSqlUtil.injectRule(spark, seqRule)
   }
 }
 
@@ -151,14 +164,9 @@ class SparkRadiantSqlApi extends Logging with Serializable {
  */
 class SparkRadiantSqlExtension extends (SparkSessionExtensions => Unit) {
   def apply(sparkExt : SparkSessionExtensions): Unit = {
+    val sqlApi = new SparkRadiantSqlApi
     // inject the extra Optimizer rule
-    val seqRule = Seq(com.spark.radiant.sql.catalyst.optimizer.SizeBasedJoinReOrdering,
-      com.spark.radiant.sql.catalyst.optimizer.UnionReuseExchangeOptimizeRule,
-      com.spark.radiant.sql.catalyst.optimizer.ExchangeOptimizeRule,
-      com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
-      com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
-    )
-    seqRule.foreach { rule =>
+    sqlApi.seqRule.foreach { rule =>
       sparkExt.injectOptimizerRule(_ => rule)
     }
   }
