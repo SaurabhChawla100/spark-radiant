@@ -33,6 +33,8 @@ class SparkJobMetricsCollector()
   extends SparkListener with Logging {
 
   private val jobInfoMap: HashMap[Long, JobInfo] = HashMap.empty
+  private val stageInfoMap: HashMap[Long, StageInfo] = HashMap.empty
+  private val taskInfoMap: HashMap[Long, Seq[TaskInfo]] = HashMap.empty
   private var startTime: Long = 0
 
   // TODO work on this feature
@@ -51,12 +53,65 @@ class SparkJobMetricsCollector()
   }
 
   override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
+   val stageInfo = stageSubmitted.stageInfo
+    stageInfoMap.put(stageInfo.stageId,
+      StageInfo(stageInfo.stageId, stageInfo.submissionTime.get))
   }
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
+    val stageInfo = stageCompleted.stageInfo
+    val stageInfoValue = stageInfoMap.getOrElseUpdate(stageInfo.stageId,
+      StageInfo(stageInfo.stageId, 0))
+    stageInfoValue.StageEnd = stageInfo.completionTime.get
+    val taskInfoValue: Seq[TaskInfo] = taskInfoMap(stageInfo.stageId)
+    val executorGroupByTask =
+      taskInfoValue.groupBy(_.executorId).mapValues { x =>
+        (x.map(_.recordsRead).sum, x.map(_.shuffleWriteRecord).sum,
+          x.map(_.shuffleReadRecord).sum, x.map(_.recordsWrite).sum)
+      }
+    val meanTaskProcessByExec =
+      Math.floor(executorGroupByTask.values.map(_._1).sum / executorGroupByTask.size)
+    val taskReadInfo = taskInfoValue.map(x => x.recordsRead)
+    val meanTaskRecordsProcess = Math.floor(taskReadInfo.sum / taskReadInfo.size)
+    val skewTaskInfo = taskInfoValue.filter {
+      taskInfo =>
+        (taskInfo.recordsRead/meanTaskRecordsProcess) >= (20 * meanTaskRecordsProcess)/100
+    }
+    val skewTaskInfoExec = executorGroupByTask.values.filter {
+      taskInfo =>
+        (taskInfo._1/meanTaskProcessByExec) >= (20 * meanTaskProcessByExec)/100
+    }
+    // scalastyle:off println
+    println(s"Stage Info Metrics stageId :: ${stageInfo.stageId}")
+    println(s"processing task info on executor:: ${executorGroupByTask.toString()}")
+    println(s"skewTaskInfo based on the task processed:${skewTaskInfo}")
+    println(s"skewTaskInfoExec based on the task processed on each executor :" +
+      s" ${skewTaskInfoExec.toString()}")
+    stageInfoMap.put(stageInfo.stageId, stageInfoValue)
+    taskInfoMap.drop(stageInfo.stageId)
   }
 
-  override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = {
+  override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = synchronized {
+    val stageId = taskEnd.stageId
+    val taskInfo = taskEnd.taskInfo
+    val taskInputMetrics = taskEnd.taskMetrics.inputMetrics
+    val taskOutputMetrics = taskEnd.taskMetrics.outputMetrics
+    val taskShuffleReadRecords = taskEnd.taskMetrics.shuffleReadMetrics
+    val taskShuffleWriteRecords = taskEnd.taskMetrics.shuffleWriteMetrics
+    var taskInfoSeq = taskInfoMap.getOrElseUpdate(stageId, Seq.empty)
+    // Create a taskInfo
+    val info = TaskInfo(taskInfo.taskId,
+      taskInputMetrics.recordsRead + taskShuffleWriteRecords.recordsWritten,
+      taskShuffleWriteRecords.recordsWritten, taskInfo.executorId,
+      taskShuffleReadRecords.recordsRead, taskOutputMetrics.recordsWritten,
+      taskInfo.launchTime - taskInfo.finishTime)
+
+    if (taskInfoSeq.nonEmpty) {
+      taskInfoSeq = taskInfoSeq :+ info
+    } else {
+      taskInfoSeq = Seq(info)
+    }
+    taskInfoMap.put(taskEnd.stageId, taskInfoSeq)
   }
 
   override def onApplicationStart(applicationStart: SparkListenerApplicationStart): Unit = {
@@ -95,3 +150,18 @@ class SparkJobMetricsCollector()
 }
 
 case class JobInfo(jobId: Long = -1L, var jobStart: Long = 0L, var jobEnd: Long = 0L)
+
+case class StageInfo (
+   stageId: Long = -1L,
+   var stageStart: Long = 0L,
+   var StageEnd: Long = 0L,
+   var taskInfo: Option[Seq[TaskInfo]] = None)
+
+case class TaskInfo (
+   taskId: Long = -1L,
+   recordsRead: Long = -1L,
+   shuffleWriteRecord: Long = -1L,
+   executorId: String = "0",
+   shuffleReadRecord: Long = -1L,
+   recordsWrite: Long = -1L,
+   taskCompletionTime: Long = 0L)
