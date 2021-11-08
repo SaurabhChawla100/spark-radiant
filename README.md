@@ -139,7 +139,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
       ``` 
         In PySpark
    
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -170,7 +170,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
       ``` 
          In PySpark
    
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -198,7 +198,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ``` 
          In PySpark
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -219,6 +219,38 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
         Stage metrics, Task Metrics. This is enabled by using the configuration
         --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector and providing the jars in the class path 
         using --jars spark-radiant-core-1.0.3-SNAPSHOT.jar
+      
+   ```
+   Spark-Radiant Metrics Collector
+   Total Time taken by Application:: 123 sec
+   Driver Metrics:
+   Time spend in the Driver: 120 sec
+   Stage Info Metrics:
+   Stage Info Metrics Stage Id:0
+   {
+   "Stage Id": 0,
+   "Stage Completion Time": 1793 ms,
+   "Average Task Completion Time": 30 ms
+   }
+   Stage Info Metrics Stage Id:1
+   {
+   "Stage Id": 1,
+   "Stage Completion Time": 53 ms,
+   "Average Task Completion Time": 9 ms
+   }
+   Stage Info Metrics Stage Id:2
+   {
+   "Stage Id": 2,
+   "Stage Completion Time": 380 ms,
+   "Average Task Completion Time": 360 ms
+   }
+   Stage Info Metrics Stage Id:3
+   {
+   "Stage Id": 3,
+   "Stage Completion Time": 1335 ms,
+   "Average Task Completion Time": 1311 ms
+   }
+    ```
    
    b) **Enhanced Autoscaling in Spark**- This is WIP
 
