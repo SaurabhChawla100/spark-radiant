@@ -222,33 +222,50 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
       
    ```
    Spark-Radiant Metrics Collector
-   Total Time taken by Application:: 123 sec
-   Driver Metrics:
-   Time spend in the Driver: 120 sec
-   Stage Info Metrics:
+   Total Time taken by Application:: 895 sec
+   
+   *****Driver Metrics*****
+   Time spend in the Driver: 307 sec
+   Percentage of time spend in the Driver: 34. Try adding more parallelism to the Spark job for Optimal Performance
+   
+   *****Stage Info Metrics*****
    Stage Info Metrics Stage Id:0
    {
    "Stage Id": 0,
-   "Stage Completion Time": 1793 ms,
-   "Average Task Completion Time": 30 ms
+   "Number of Task": 10,
+   "Stage Completion Time": 858 ms,
+   "Average Task Completion Time": 139 ms
+   "Stage Skew info": Skew task in not present in this stage
    }
    Stage Info Metrics Stage Id:1
    {
    "Stage Id": 1,
+   "Number of Task": 10,
    "Stage Completion Time": 53 ms,
    "Average Task Completion Time": 9 ms
+   "Stage Skew info": Skew task in not present in this stage
    }
    Stage Info Metrics Stage Id:2
    {
    "Stage Id": 2,
-   "Stage Completion Time": 380 ms,
-   "Average Task Completion Time": 360 ms
-   }
-   Stage Info Metrics Stage Id:3
-   {
-   "Stage Id": 3,
-   "Stage Completion Time": 1335 ms,
-   "Average Task Completion Time": 1311 ms
+   "Number of Task": 100,
+   "Stage Completion Time": 11206 ms,
+   "Average Task Completion Time": 221 ms
+   "Stage Skew info": List({
+   "Task Id": 0,
+   "Number of records read": 11887,
+   "Number of shuffle read Record": 11887,
+   "Number of records write": 0,
+   "Number of shuffle write Record": 0,
+   "Task Completion Time": 10656 ms
+   }, {
+   "Task Id": 4,
+   "Number of records read": 11847,
+   "Number of shuffle read Record": 11847,
+   "Number of records write": 0,
+   "Number of shuffle write Record": 0,
+   "Task Completion Time": 10013 ms
+   })
    }
     ```
    

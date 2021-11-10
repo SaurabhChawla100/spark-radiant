@@ -20,7 +20,6 @@ package com.spark.radiant.core
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler._
 
-import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.LinkedHashMap
 
@@ -61,14 +60,14 @@ class SparkJobMetricsCollector()
       stageInfoMap.remove(stageInfoMap.iterator.next()._1)
     }
     stageInfoMap.put(stageInfo.stageId,
-      StageInfo(stageInfo.stageId, stageInfo.submissionTime.get))
+      StageInfo(stageInfo.stageId, stageInfo.numTasks, stageInfo.submissionTime.get))
   }
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
     val stageInfo = stageCompleted.stageInfo
     val stageInfoValue = stageInfoMap.getOrElseUpdate(stageInfo.stageId,
       StageInfo(stageInfo.stageId, 0))
-    stageInfoValue.StageEnd = stageInfo.completionTime.get
+    stageInfoValue.stageEndTime = stageInfo.completionTime.get
     val taskInfoValue: Seq[TaskInfo] = taskInfoMap(stageInfo.stageId)
     val executorGroupByTask =
       taskInfoValue.groupBy(_.executorId).mapValues { x =>
@@ -77,13 +76,14 @@ class SparkJobMetricsCollector()
       }
     val meanTaskProcessByExec =
       Math.floor(executorGroupByTask.values.map(_._1).sum / executorGroupByTask.size)
-    val taskReadInfo = taskInfoValue.map(x => x.recordsRead)
-    val meanTaskRecordsProcess = Math.floor(taskReadInfo.sum / taskReadInfo.size)
-    val taskCompletionTime = taskInfoValue.map(x => x.taskCompletionTime)
-    val meanTaskCompletionTime = Math.floor(taskCompletionTime.sum / taskCompletionTime.size)
+    val taskInfo = taskInfoValue.map(x => (x.recordsRead, x.taskCompletionTime))
+    val meanTaskRecordsProcess =
+      Math.floor(taskInfo.map(_._1).sum / taskInfo.size)
+    val meanTaskCompletionTime = Math.floor(taskInfo.map(_._2).sum / taskInfo.size)
     val skewTaskInfo = taskInfoValue.filter {
       taskInfo =>
-        (taskInfo.recordsRead/meanTaskRecordsProcess) >= (20 * meanTaskRecordsProcess)/100
+        ((taskInfo.recordsRead/meanTaskRecordsProcess) >= (20 * meanTaskRecordsProcess)/100
+          || (taskInfo.taskCompletionTime/meanTaskCompletionTime) >= (30 * meanTaskCompletionTime)/100)
     }
     val skewTaskInfoExec = executorGroupByTask.values.filter {
       taskInfo =>
@@ -96,6 +96,11 @@ class SparkJobMetricsCollector()
     logInfo(s"skewTaskInfoExec based on the task processed on each executor :" +
       s" ${skewTaskInfoExec.toString()}")
     stageInfoValue.meanTaskCompletionTime = meanTaskCompletionTime.toLong
+    stageInfoValue.skewTaskInfo = if (skewTaskInfo.nonEmpty) {
+      Some(skewTaskInfo)
+    } else {
+      None
+    }
     stageInfoMap.put(stageInfo.stageId, stageInfoValue)
     taskInfoMap.drop(stageInfo.stageId)
   }
@@ -132,7 +137,9 @@ class SparkJobMetricsCollector()
     // scalastyle:off println
     println("Spark-Radiant Metrics Collector")
     println(s"Total Time taken by Application:: $completionTime sec")
+    println()
     showDriverMetrics(completionTime)
+    showStageLevelMetrics()
   }
 
   private def addSkewTaskInfo(): Unit = {
@@ -145,23 +152,29 @@ class SparkJobMetricsCollector()
     val jobTime = (jobInfoMap.map(info => info._2.jobEnd - info._2.jobStart).sum)/1000
     val timeSpendInDriver = (completionTime - jobTime)
     // scalastyle:off println
-    println("Driver Metrics:")
+    println("*****Driver Metrics*****")
     println(s"Time spend in the Driver: $timeSpendInDriver sec")
     val percentDriverTime = (timeSpendInDriver*100)/completionTime
     // if the time spend in driver is greater than the 25% of total time
     // and total time spend in driver greater than 5 min than recommend
     // for adding more parallelism in the spark Application
-    if (percentDriverTime > 25 && timeSpendInDriver > 300) {
-      println(s"Percentage of time spend in the Driver: $percentDriverTime." +
+    if (percentDriverTime > 30 && timeSpendInDriver > 300) {
+      println(s"Percentage of time spend in the Driver: $percentDriverTime %." +
         s" Try adding more parallelism to the Spark job for Optimal Performance")
     }
-    println("Stage Info Metrics:")
+    println()
+  }
+
+  private def showStageLevelMetrics(): Unit = {
+    // scalastyle:off println
+    println("*****Stage Info Metrics*****")
     val itr = stageInfoMap.iterator
     while(itr.hasNext) {
       val stageInfo = itr.next
       println(s"Stage Info Metrics Stage Id:${stageInfo._1}")
       println(stageInfo._2)
     }
+    println()
   }
 }
 
@@ -169,17 +182,25 @@ case class JobInfo(jobId: Long = -1L, var jobStart: Long = 0L, var jobEnd: Long 
 
 case class StageInfo (
    stageId: Long = -1L,
+   var totalTask: Long = 0L,
    var stageStart: Long = 0L,
-   var StageEnd: Long = 0L,
+   var stageEndTime: Long = 0L,
    var meanTaskCompletionTime: Long = 0L,
-   var taskInfo: Option[Seq[TaskInfo]] = None) {
+   var skewTaskInfo: Option[Seq[TaskInfo]] = None) {
 
   override def toString(): String = {
-    val stageCompletionTime = StageEnd - stageStart
+    val stageCompletionTime = stageEndTime - stageStart
+    val skewTaskInfoValue = if (skewTaskInfo.isDefined) {
+      skewTaskInfo.get.toString()
+    } else {
+      "Skew task in not present in this stage"
+    }
     s"""{
        | "Stage Id": ${stageId},
+       | "Number of Task": ${totalTask},
        | "Stage Completion Time": ${stageCompletionTime} ms,
        | "Average Task Completion Time": ${meanTaskCompletionTime} ms
+       | "Stage Skew info": ${skewTaskInfoValue}
     }""".stripMargin
   }
 }
@@ -191,4 +212,16 @@ case class TaskInfo (
    executorId: String = "0",
    shuffleReadRecord: Long = -1L,
    recordsWrite: Long = -1L,
-   taskCompletionTime: Long = 0L)
+   taskCompletionTime: Long = 0L) {
+
+  override def toString(): String = {
+    s"""{
+       | "Task Id": ${taskId},
+       | "Number of records read in task": ${recordsRead},
+       | "Number of shuffle read Record in task": ${shuffleReadRecord},
+       | "Number of records write in task": ${recordsWrite},
+       | "Number of shuffle write Record in task": ${shuffleWriteRecord},
+       | "Task Completion Time": ${taskCompletionTime} ms
+    }""".stripMargin
+  }
+}
