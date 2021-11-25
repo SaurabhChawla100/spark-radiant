@@ -17,8 +17,11 @@
 
 package com.spark.radiant.core
 
+import com.spark.radiant.core.config.CoreConf
+import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler._
+import org.apache.spark.sql.SparkSession
 
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.LinkedHashMap
@@ -38,6 +41,10 @@ class SparkJobMetricsCollector()
   private val taskInfoMap: HashMap[Long, Seq[TaskInfo]] = HashMap.empty
   private var startTime: Long = 0
   private val maxStageInfo: Int = 50
+  private val sparkConf = SparkSession.getActiveSession match {
+    case Some(spark) => spark.sparkContext.getConf
+    case _ => new SparkConf()
+  }
 
   // TODO work on this feature
 
@@ -82,8 +89,10 @@ class SparkJobMetricsCollector()
     val meanTaskCompletionTime = Math.floor(taskInfo.map(_._2).sum / taskInfo.size)
     val skewTaskInfo = taskInfoValue.filter {
       taskInfo =>
-        ((taskInfo.recordsRead/meanTaskRecordsProcess) >= (20 * meanTaskRecordsProcess)/100
-          || (taskInfo.taskCompletionTime/meanTaskCompletionTime) >= (30 * meanTaskCompletionTime)/100)
+        ((taskInfo.recordsRead/meanTaskRecordsProcess) >=
+          (CoreConf.getPercentMeanRecordProcessed(sparkConf) * meanTaskRecordsProcess)/100
+          || (taskInfo.taskCompletionTime/meanTaskCompletionTime) >=
+          (CoreConf.getPercentMeanTimeRecordProcessed(sparkConf) * meanTaskCompletionTime)/100)
     }
     val skewTaskInfoExec = executorGroupByTask.values.filter {
       taskInfo =>
@@ -101,6 +110,7 @@ class SparkJobMetricsCollector()
     } else {
       None
     }
+    stageInfoValue.numberOfExecutor = executorGroupByTask.size
     stageInfoMap.put(stageInfo.stageId, stageInfoValue)
     taskInfoMap.drop(stageInfo.stageId)
   }
@@ -155,10 +165,11 @@ class SparkJobMetricsCollector()
     println("*****Driver Metrics*****")
     println(s"Time spend in the Driver: $timeSpendInDriver sec")
     val percentDriverTime = (timeSpendInDriver*100)/completionTime
-    // if the time spend in driver is greater than the 25% of total time
+    // if the time spend in driver is greater than the 30% of total time
     // and total time spend in driver greater than 5 min than recommend
     // for adding more parallelism in the spark Application
-    if (percentDriverTime > 30 && timeSpendInDriver > 300) {
+    if (percentDriverTime > CoreConf.getDriverPercentSpentThreshold(sparkConf)
+      && timeSpendInDriver > CoreConf.getDriverSpentTimeThreshold(sparkConf)) {
       println(s"Percentage of time spend in the Driver: $percentDriverTime %." +
         s" Try adding more parallelism to the Spark job for Optimal Performance")
     }
@@ -186,6 +197,7 @@ case class StageInfo (
    var stageStart: Long = 0L,
    var stageEndTime: Long = 0L,
    var meanTaskCompletionTime: Long = 0L,
+   var numberOfExecutor: Long = 0L,
    var skewTaskInfo: Option[Seq[TaskInfo]] = None) {
 
   override def toString(): String = {
@@ -198,6 +210,7 @@ case class StageInfo (
     s"""{
        | "Stage Id": ${stageId},
        | "Number of Task": ${totalTask},
+       | "Total Executors ran to complete all Task": ${numberOfExecutor},
        | "Stage Completion Time": ${stageCompletionTime} ms,
        | "Average Task Completion Time": ${meanTaskCompletionTime} ms
        | "Stage Skew info": ${skewTaskInfoValue}
@@ -217,6 +230,7 @@ case class TaskInfo (
   override def toString(): String = {
     s"""{
        | "Task Id": ${taskId},
+       | "Executor Id": ${executorId},
        | "Number of records read in task": ${recordsRead},
        | "Number of shuffle read Record in task": ${shuffleReadRecord},
        | "Number of records write in task": ${recordsWrite},

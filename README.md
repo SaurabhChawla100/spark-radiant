@@ -233,6 +233,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    {
    "Stage Id": 0,
    "Number of Task": 10,
+   "Total Executors ran to complete all Task": 2,
    "Stage Completion Time": 858 ms,
    "Average Task Completion Time": 139 ms
    "Stage Skew info": Skew task in not present in this stage
@@ -241,6 +242,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    {
    "Stage Id": 1,
    "Number of Task": 10,
+   "Total Executors ran to complete all Task": 2,
    "Stage Completion Time": 53 ms,
    "Average Task Completion Time": 9 ms
    "Stage Skew info": Skew task in not present in this stage
@@ -249,10 +251,12 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    {
    "Stage Id": 2,
    "Number of Task": 100,
+   "Total Executors ran to complete all Task": 4,
    "Stage Completion Time": 11206 ms,
    "Average Task Completion Time": 221 ms
    "Stage Skew info": List({
    "Task Id": 0,
+   "Executor Id": 3,
    "Number of records read": 11887,
    "Number of shuffle read Record": 11887,
    "Number of records write": 0,
@@ -260,6 +264,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Task Completion Time": 10656 ms
    }, {
    "Task Id": 4,
+   "Executor Id": 1,
    "Number of records read": 11847,
    "Number of shuffle read Record": 11847,
    "Number of records write": 0,
