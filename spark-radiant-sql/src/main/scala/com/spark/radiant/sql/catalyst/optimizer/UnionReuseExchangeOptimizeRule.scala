@@ -23,9 +23,10 @@ import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LocalRelation, LogicalPlan,
-  Project, Repartition, RepartitionByExpression, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate,
+  LocalRelation, LogicalPlan, Project, Repartition, RepartitionByExpression, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 
 /**
  * UnionReuseExchangeOptimizeRule - This rule works for scenario when union is present with
@@ -95,10 +96,12 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     plan match {
       case LocalRelation(_, _, _)
            |  LogicalRelation(_, _, _, _)
-           |  HiveTableRelation(_, _, _, _, _) => true
+           |  HiveTableRelation(_, _, _, _, _)
+           |  DataSourceV2ScanRelation(_, _, _) => true
       case Project(_, LocalRelation(_, _, _))
            |  Project(_, LogicalRelation(_, _, _, _))
-           |  Project(_, HiveTableRelation(_, _, _, _, _)) => true
+           |  Project(_, HiveTableRelation(_, _, _, _, _))
+           |  Project(_, DataSourceV2ScanRelation(_, _, _)) => true
       case _ => false
     }
   }
@@ -121,10 +124,12 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
     if (leftPlan.getClass.equals(rightPlan.getClass)) {
       leftPlan match {
         case Project(_, localRel@LocalRelation(_, _, _))
-          if rightPlan.asInstanceOf[Project].isInstanceOf[LocalRelation] =>
+          if rightPlan.isInstanceOf[Project]
+            && rightPlan.asInstanceOf[Project].isInstanceOf[LocalRelation] =>
           optFlag = (localRel.schema.fieldNames.toSet
             == rightPlan.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
-        case localRel@LocalRelation(_, _, _) =>
+        case localRel@LocalRelation(_, _, _)
+          if rightPlan.isInstanceOf[LocalRelation] =>
           optFlag = (localRel.schema.fieldNames.toSet
           == rightPlan.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
         case Project(_, logRel@LogicalRelation(_, _, _, _))
@@ -139,10 +144,21 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
             relation.asInstanceOf[HadoopFsRelation].inputFiles
           optFlag = leftFiles.toSet == rightFiles.toSet
         case Project(_, hiveRel@HiveTableRelation(_, _, _, _, _))
-          if rightPlan.asInstanceOf[Project].isInstanceOf[HiveTableRelation] =>
+          if rightPlan.isInstanceOf[Project] &&
+            rightPlan.asInstanceOf[Project].isInstanceOf[HiveTableRelation] =>
           optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
-        case hiveRel@HiveTableRelation(_, _, _, _, _) =>
+        case hiveRel@HiveTableRelation(_, _, _, _, _)
+          if rightPlan.isInstanceOf[HiveTableRelation] =>
           optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
+        case Project(_, dsv2@DataSourceV2ScanRelation(_, _, _))
+          if rightPlan.isInstanceOf[Project] &&
+            rightPlan.asInstanceOf[Project].isInstanceOf[DataSourceV2ScanRelation] =>
+          optFlag = dsv2.scan ==
+            rightPlan.asInstanceOf[DataSourceV2ScanRelation].scan
+        case dsv2@DataSourceV2ScanRelation(_, _, _)
+          if rightPlan.isInstanceOf[DataSourceV2ScanRelation] =>
+          optFlag = dsv2.scan ==
+            rightPlan.asInstanceOf[DataSourceV2ScanRelation].scan
         case _ =>
       }
     }

@@ -246,4 +246,43 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
     assert(reuseExchange.nonEmpty)
   }
 
+  test("test the UnionReuseExchangeOptimizeRule is applied for DSV2") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+    spark.read.parquet("src/test/resources/TestExchangeOptParquet1").
+      createOrReplaceTempView("testDf1")
+    val df = spark.sql("select test11, count(*) as count from testDf1" +
+      " group by test11 union select test11, sum(test11) as count" +
+      " from testDf1 group by test11")
+    val updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
+      x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isDefined)
+    df.collect()
+    val executedPlan = df.queryExecution.executedPlan.transform {
+      case ad: AdaptiveSparkPlanExec => ad.executedPlan
+      case sh: ShuffleQueryStageExec => sh.plan
+      case ex => ex
+    }
+    val reuseExchange =
+      executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
+    assert(reuseExchange.nonEmpty)
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
+  }
+
+  test("test the UnionReuseExchangeOptimizeRule is not applied in DSV2 for different scan") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+    spark.read.parquet("src/test/resources/TestExchangeOptParquet1").
+      createOrReplaceTempView("testDf1")
+    val df = spark.sql("select test11, count(*) as count from testDf1" +
+      " group by test11 union select test11, sum(test11) as count" +
+      " from testDf1 where test12 ='5' group by test11")
+    // UnionReuseExchangeOptimizeRule is not applied in case of different scan
+    // here one of the scan has pushed filter for test12 ='5'
+    val updateDFPlan = df.queryExecution.optimizedPlan.find {x =>
+      x.isInstanceOf[RepartitionByExpression]
+    }
+    assert(updateDFPlan.isEmpty)
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
+  }
 }
