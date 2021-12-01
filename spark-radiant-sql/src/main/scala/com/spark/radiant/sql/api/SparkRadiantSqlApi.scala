@@ -21,11 +21,14 @@ import com.spark.radiant.sql.catalyst.optimizer.SparkSqlDFOptimizerRule
 import com.spark.radiant.sql.utils.SparkSqlUtils
 
 import java.util.concurrent.TimeUnit
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.sparkRadiantUtil.SparkSqlUtil
+
+import scala.collection.mutable.Map
 
 /**
  * SparkRadiantSqlApi having list of methods that are exposed to users

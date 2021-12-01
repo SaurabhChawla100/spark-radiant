@@ -118,7 +118,11 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
         import com.spark.radiant.sql.api.SparkRadiantSqlApi
         val sparkRadiantSqlApi = new SparkRadiantSqlApi()
-        val withColMap = Map("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
+        val withColMap = scala.collection.mutable.Map("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
+        val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
+
+        if sequence of the column needs to be maintained, then use the LinkedHashMap
+        val withColMap = scala.collection.mutable.LinkedHashMap("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
         val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
 
    d) **UnionReuseExchangeOptimizeRule** - This rule works for scenarios when union is
