@@ -100,6 +100,11 @@ df.show
 5) **spark.sql.use.dynamicfilter.bhj** - Use DF in the BHJ for scenarios where one table is so huge and there is
    benefit of using DF for reducing the scan and as well as the number of records in filter. The default value is false.
 
+6) **spark.sql.dynamicFilter.pushdown.allJoinKey** - This conf is used to push all the join key values derived from the
+   other side of the join. This will help in exact dataskipping compared to only one key value used for dataskipping.
+   This will provide better performance compared to pushing only one join key value to datasource as the part
+   of pushed filter. The default value is true. This will be available from spark-radiant 1.0.3
+
 ## Running Dynamic Filter in Spark
 Provide the jar spark-radiant-sql-1.0-SNAPSHOT.jar in the class path for the spark Application. For eg using --jars etc.
 
@@ -160,11 +165,11 @@ or
 ### 4) Importing the rule for Dynamic Filter on the catalyst optimizer of the Apache Spark
 ```
 ./bin/spark-shell
- --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+ --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3-SNAPSHOT,io.github.saurabhchawla100:spark-radiant-core:1.0.3-SNAPSHOT"
  --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
 
 ./bin/spark-submit
---packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+--packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3-SNAPSHOT,io.github.saurabhchawla100:spark-radiant-core:1.0.3-SNAPSHOT"
 --class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
 --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
 

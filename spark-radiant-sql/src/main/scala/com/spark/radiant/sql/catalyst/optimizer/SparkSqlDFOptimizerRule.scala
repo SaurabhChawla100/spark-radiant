@@ -137,13 +137,26 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
 
       val thresholdPushDownLength = spark.sparkContext.getConf.getInt(
         "spark.sql.dynamicFilter.pushdown.threshold", 5000)
-      val dfr = createBloomFilterKeyColumn(DataframeForGenDf, filterToCreateDF.toList, bloomFilterAppendedKey)
-      val rightFilterKey = filterToCreateDF.head.asInstanceOf[AttributeReference]
-      val bloomFilterDfr = dfr.select(rightFilterKey.name).limit(thresholdPushDownLength+1).collect()
-      val pushDownFileScanValues = if (bloomFilterDfr.length <= thresholdPushDownLength) {
-        bloomFilterDfr.map(x => Literal(x.get(0)))
+      // conf to push all the join key values to the datasource pushed down filter
+      val useAllJoinKey = pushDownAllJoinKeyValues()(spark)
+      val dfr = createBloomFilterKeyColumn(DataframeForGenDf, filterToCreateDF.toList,
+        bloomFilterAppendedKey)
+      val rightFilterKeyValue = if (useAllJoinKey) {
+        dfr.select(filterToCreateDF.map(
+          x => col(x.asInstanceOf[AttributeReference].name)): _*)
+          .limit(thresholdPushDownLength + 1).collect()
       } else {
-        null
+        val rightFilterKey = filterToCreateDF.head.asInstanceOf[AttributeReference]
+        dfr.select(rightFilterKey.name).limit(thresholdPushDownLength + 1).collect()
+      }
+      var pushDownFileScanValues: List[List[Literal]] = List.empty
+      if (rightFilterKeyValue.length <= thresholdPushDownLength) {
+        var rightKeyIndex = 0
+        while(rightKeyIndex < rightFilterKeyValue.head.length) {
+          val lit = List(rightFilterKeyValue.map(x => Literal(x.get(rightKeyIndex))).toList)
+          pushDownFileScanValues = pushDownFileScanValues ++ lit
+          rightKeyIndex = rightKeyIndex + 1
+        }
       }
       val bloomFilter = dfr.stat.bloomFilter(bloomFilterAppendedKey, bloomFilterCount, fpp)
       val broadcastValue = spark.sparkContext.broadcast(bloomFilter)
@@ -160,10 +173,19 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
 
       var dfl: DataFrame = createDfFromLogicalPlan(spark, planForDf)
       dfl = createBloomFilterKeyColumn(dfl, filterNeededForDF.toList, bloomFilterAppendedKey)
-      if (pushDownFileScanValues != null) {
+      if (pushDownFileScanValues.nonEmpty) {
         var leftDynamicFilterPlan = dfl.queryExecution.optimizedPlan
-        leftDynamicFilterPlan =
-          Filter(In(filterNeededForDF.head, pushDownFileScanValues), leftDynamicFilterPlan)
+        var inExpr: Expression = In(filterNeededForDF.head, pushDownFileScanValues.head)
+        // push all the join key values to the datasource pushed down filter
+        if (useAllJoinKey && filterNeededForDF.size == pushDownFileScanValues.size) {
+          var leftKeyIndex = 1
+          while(leftKeyIndex < filterNeededForDF.size) {
+            inExpr = And(inExpr,
+              In(filterNeededForDF(leftKeyIndex), pushDownFileScanValues(leftKeyIndex)))
+            leftKeyIndex = leftKeyIndex + 1
+          }
+        }
+        leftDynamicFilterPlan = Filter(inExpr, leftDynamicFilterPlan)
         dfl = createDfFromLogicalPlan(spark, leftDynamicFilterPlan)
       }
       val dfl1 = dfl.filter { x =>
@@ -286,6 +308,12 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     spark.conf.get("spark.sql.dynamicfilter.comparejoinsides",
       spark.sparkContext.getConf.get("spark.sql.dynamicfilter.comparejoinsides",
         "false")).toBoolean
+  }
+
+  private def pushDownAllJoinKeyValues()(implicit spark: SparkSession):  Boolean = {
+    spark.conf.get("spark.sql.dynamicFilter.pushdown.allJoinKey",
+      spark.sparkContext.getConf.get("spark.sql.dynamicFilter.pushdown.allJoinKey",
+        "true")).toBoolean
   }
 
   private def useDynamicFilterInBHJ()(implicit spark: SparkSession):  Boolean = {
