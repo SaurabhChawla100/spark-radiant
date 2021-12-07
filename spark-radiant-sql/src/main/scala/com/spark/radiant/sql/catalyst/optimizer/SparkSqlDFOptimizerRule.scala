@@ -36,6 +36,7 @@ import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
 import org.apache.spark.sql.sources.{Filter => V2Filter}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, SparkSession}
+import org.apache.spark.util.sketch.BloomFilter
 
 private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   val bloomFilterKey = "dynamicFilterBloomFilterKey"
@@ -142,23 +143,38 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       val dfr = createBloomFilterKeyColumn(DataframeForGenDf, filterToCreateDF.toList,
         bloomFilterAppendedKey)
       val rightFilterKeyValue = if (useAllJoinKey) {
-        dfr.select(filterToCreateDF.map(
-          x => col(x.asInstanceOf[AttributeReference].name)): _*)
+        val filterToCreateDFKey = filterToCreateDF.map(
+          x => x.asInstanceOf[AttributeReference].name) ++ List(bloomFilterAppendedKey)
+        dfr.select(filterToCreateDFKey.map(x => col(x)): _*)
           .limit(thresholdPushDownLength + 1).collect()
       } else {
-        val rightFilterKey = filterToCreateDF.head.asInstanceOf[AttributeReference]
-        dfr.select(rightFilterKey.name).limit(thresholdPushDownLength + 1).collect()
+        // push down only join key value to datasource/fileSourceScan
+        val rightFilterKey =
+          List(filterToCreateDF.head.asInstanceOf[AttributeReference].name,
+            bloomFilterAppendedKey)
+        dfr.select(rightFilterKey.map(x => col(x)): _*).
+          limit(thresholdPushDownLength + 1).collect()
       }
-      var pushDownFileScanValues: List[List[Literal]] = List.empty
+      var createBloomFilterValue: List[String] = List.empty
+      var pushDownFileScanValues: List[Set[Literal]] = List.empty
       if (rightFilterKeyValue.length <= thresholdPushDownLength) {
         var rightKeyIndex = 0
         while(rightKeyIndex < rightFilterKeyValue.head.length) {
-          val lit = List(rightFilterKeyValue.map(x => Literal(x.get(rightKeyIndex))).toList)
+          val lit = List(rightFilterKeyValue.map(x => Literal(x.get(rightKeyIndex))).toSet)
           pushDownFileScanValues = pushDownFileScanValues ++ lit
           rightKeyIndex = rightKeyIndex + 1
         }
+        createBloomFilterValue =
+          rightFilterKeyValue.map(_.getAs(bloomFilterAppendedKey).toString).toList
       }
-      val bloomFilter = dfr.stat.bloomFilter(bloomFilterAppendedKey, bloomFilterCount, fpp)
+      val bloomFilter = if (createBloomFilterValue.nonEmpty) {
+        val filter = BloomFilter.create(bloomFilterCount, fpp)
+        // TODO -> Parallelize the creation of bloomfilter from the values using aggregation
+        createBloomFilterValue.foreach(x => filter.put(x))
+        filter
+      } else {
+        dfr.stat.bloomFilter(bloomFilterAppendedKey, bloomFilterCount, fpp)
+      }
       val broadcastValue = spark.sparkContext.broadcast(bloomFilter)
 
       // TODO getting the task serialization exception on using Project,
@@ -175,13 +191,13 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       dfl = createBloomFilterKeyColumn(dfl, filterNeededForDF.toList, bloomFilterAppendedKey)
       if (pushDownFileScanValues.nonEmpty) {
         var leftDynamicFilterPlan = dfl.queryExecution.optimizedPlan
-        var inExpr: Expression = In(filterNeededForDF.head, pushDownFileScanValues.head)
+        var inExpr: Expression = In(filterNeededForDF.head, pushDownFileScanValues.head.toList)
         // push all the join key values to the datasource pushed down filter
-        if (useAllJoinKey && filterNeededForDF.size == pushDownFileScanValues.size) {
+        if (useAllJoinKey && filterNeededForDF.size == pushDownFileScanValues.size -1) {
           var leftKeyIndex = 1
           while(leftKeyIndex < filterNeededForDF.size) {
             inExpr = And(inExpr,
-              In(filterNeededForDF(leftKeyIndex), pushDownFileScanValues(leftKeyIndex)))
+              In(filterNeededForDF(leftKeyIndex), pushDownFileScanValues(leftKeyIndex).toList))
             leftKeyIndex = leftKeyIndex + 1
           }
         }
