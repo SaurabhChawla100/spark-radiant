@@ -168,9 +168,16 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
           rightFilterKeyValue.map(_.getAs(bloomFilterAppendedKey).toString).toList
       }
       val bloomFilter = if (createBloomFilterValue.nonEmpty) {
-        val filter = BloomFilter.create(bloomFilterCount, fpp)
-        // TODO -> Parallelize the creation of bloomfilter from the values using aggregation
-        createBloomFilterValue.foreach(x => filter.put(x))
+        val utils = new SparkSqlUtils()
+        val filter = if (createBloomFilterFromRDD()(spark)) {
+          utils.createBloomFilterUsingRDD(
+          spark.sparkContext.parallelize(createBloomFilterValue, 4),
+          bloomFilterCount, fpp)
+        } else {
+          val bloomFilter = BloomFilter.create(bloomFilterCount, fpp)
+          createBloomFilterValue.foreach(x => bloomFilter.put(x))
+          bloomFilter
+        }
         filter
       } else {
         dfr.stat.bloomFilter(bloomFilterAppendedKey, bloomFilterCount, fpp)
@@ -336,6 +343,12 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     spark.conf.get("spark.sql.use.dynamicfilter.bhj",
       spark.sparkContext.getConf.get("spark.sql.use.dynamicfilter.bhj",
         "false")).toBoolean
+  }
+
+  private def createBloomFilterFromRDD()(implicit spark: SparkSession):  Boolean = {
+    spark.conf.get("spark.sql.create.bloomfilter.rdd",
+      spark.sparkContext.getConf.get("spark.sql.create.bloomfilter.rdd",
+        "true")).toBoolean
   }
 
   private def validJoinForDynamicFilter(joinType: JoinType): Boolean = {

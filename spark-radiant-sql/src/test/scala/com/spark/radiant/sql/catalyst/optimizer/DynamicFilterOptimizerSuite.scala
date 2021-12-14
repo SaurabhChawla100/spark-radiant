@@ -388,4 +388,42 @@ class DynamicFilterOptimizerSuite extends AnyFunSuite
       assert(pushedFilter.toString === expected || pushedFilter.toString === expected1)
     }
   }
+
+  test("test the sequential creation of BloomFilter in DF") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.sql("set spark.sql.dynamicfilter.comparejoinsides=true")
+    spark.sql("set spark.sql.create.bloomfilter.rdd=false")
+
+    spark.read.parquet("src/test/resources/Testparquet1").createOrReplaceTempView("testDf1")
+    spark.read.parquet("src/test/resources/Testparquet2").createOrReplaceTempView("testDf2")
+
+    val df = spark.sql("select * from testDf1 a join testDf2 b on" +
+      " a.test11=b.test21 where b.test22=2")
+    val dfOptimizer = new SparkSqlDFOptimizerRule()
+    val updateDFPlan = df.queryExecution.optimizedPlan.find{ x => x.isInstanceOf[TypedFilter] }
+    assert(updateDFPlan.isDefined)
+    assert(updateDFPlan.get.schema.names.exists(_.contains(dfOptimizer.bloomFilterKey)))
+    // test pushDown dynamic filter
+    val executedPlan = df.queryExecution.executedPlan
+    val leaves = executedPlan match {
+      case adaptive: AdaptiveSparkPlanExec => adaptive.executedPlan.collectLeaves()
+      case other => other.collectLeaves()
+    }
+    val fileScan = leaves.find(_.isInstanceOf[FileSourceScanExec])
+    if (fileScan.isDefined) {
+      val fileSourceScanExec = fileScan.get.asInstanceOf[FileSourceScanExec]
+      val pushedFilter = fileSourceScanExec.metadata.get("PushedFilters")
+      val expected = "Some([IsNotNull(test22)," +
+        " EqualTo(test22,2), IsNotNull(test21), In(test21, [1,2,3,4])])"
+      val expectedPattern = "Some([IsNotNull(test22), EqualTo(test22,2)," +
+        " In(test21, [1,2,3,4]), IsNotNull(test21)])"
+      assert(pushedFilter.toString === expected || pushedFilter.toString === expectedPattern)
+      val expectedDFOutput = "test21,test22,test23"
+      val dfAppliedSchema = fileSourceScanExec.schema.names.mkString(",")
+      assert(dfAppliedSchema === expectedDFOutput)
+      assert(df.limit(2).collect() === Array(Row(1, 2, 5, 1, 1), Row(1, 2, 5, 1, 2)))
+      assert(df.count() === 6)
+    }
+    spark.sql("set spark.sql.dynamicfilter.comparejoinsides=false")
+  }
 }

@@ -18,18 +18,21 @@
 package com.spark.radiant.sql.utils
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.{ExecutorService, Executors}
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream, FileSystem, Path}
 
 import org.apache.spark.util.sketch.BloomFilter
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream, FileSystem, Path}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{Filter => V2Filter}
+import org.apache.spark.sql.types.{IntegerType, LongType, ShortType}
 
 import scala.reflect.runtime.{universe => ru}
 
@@ -164,5 +167,36 @@ private[sql] class SparkSqlUtils extends Serializable {
         getSplitByAndFilter(cond1) ++ getSplitByAndFilter(cond2)
       case other => (other :: Nil)
     }
+  }
+
+  def createBloomFilterUsingRDD(rdd: RDD[_],
+     bloomFilterCount: Long,
+     fpp: Double): BloomFilter = {
+    // create bloomFilter from the RDD
+    val bloomFilter = rdd.treeAggregate(null.asInstanceOf[BloomFilter])(
+      (filter, value) => {
+        val theFilter: BloomFilter = if (filter == null) {
+          BloomFilter.create(bloomFilterCount, fpp)
+        } else {
+          filter
+        }
+        value match {
+          case Long| Int| Short| IntegerType| LongType| ShortType  =>
+            theFilter.putLong(value.asInstanceOf[Long])
+          case _ => theFilter.put(value)
+        }
+        theFilter
+      },
+      (filter1, filter2) => {
+        if (filter1 == null) {
+          filter2
+        } else if (filter2 == null) {
+          filter1
+        } else {
+          filter1.mergeInPlace(filter2)
+        }
+      }
+    )
+    bloomFilter
   }
 }
