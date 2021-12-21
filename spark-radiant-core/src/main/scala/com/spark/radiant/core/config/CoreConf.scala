@@ -24,4 +24,15 @@ object CoreConf {
     sparkConf.getInt("spark.core.percent.mean.time.record.processed", 30)
   }
 
+  private [core] def getTimeForTaskCompletion(sparkConf: SparkConf): Long = {
+    // default value is 5 sec
+    sparkConf.getLong("spark.core.time.task.completion", 5000L)
+  }
+
+  private [core] def getCleanUpStageInfo(sparkConf: SparkConf): Long = {
+    // default value is 10
+    sparkConf.getInt("spark.core.clean.stage.Info", 10)
+  }
+
+
 }

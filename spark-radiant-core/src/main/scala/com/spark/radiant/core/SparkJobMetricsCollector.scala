@@ -64,7 +64,12 @@ class SparkJobMetricsCollector()
   override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
    val stageInfo = stageSubmitted.stageInfo
     if (stageInfoMap.size == maxStageInfo) {
-      stageInfoMap.remove(stageInfoMap.iterator.next()._1)
+      // clean up n number of stage info given as per conf spark.core.clean.stage.Info
+      val stageCleanUp = CoreConf.getCleanUpStageInfo(sparkConf)
+      val itr = stageInfoMap.iterator
+      for(clean <- 1 to stageCleanUp) {
+        stageInfoMap.remove(itr.next()._1)
+      }
     }
     stageInfoMap.put(stageInfo.stageId,
       StageInfo(stageInfo.stageId, stageInfo.numTasks, stageInfo.submissionTime.get))
@@ -91,8 +96,10 @@ class SparkJobMetricsCollector()
       taskInfo =>
         ((taskInfo.recordsRead/meanTaskRecordsProcess) >=
           (CoreConf.getPercentMeanRecordProcessed(sparkConf) * meanTaskRecordsProcess)/100
-          || (taskInfo.taskCompletionTime/meanTaskCompletionTime) >=
-          (CoreConf.getPercentMeanTimeRecordProcessed(sparkConf) * meanTaskCompletionTime)/100)
+          || ((taskInfo.taskCompletionTime >=
+          CoreConf.getTimeForTaskCompletion(sparkConf))
+          && (taskInfo.taskCompletionTime/meanTaskCompletionTime) >=
+          (CoreConf.getPercentMeanTimeRecordProcessed(sparkConf) * meanTaskCompletionTime)/100))
     }
     val skewTaskInfoExec = executorGroupByTask.values.filter {
       taskInfo =>
@@ -105,7 +112,9 @@ class SparkJobMetricsCollector()
     logInfo(s"skewTaskInfoExec based on the task processed on each executor :" +
       s" ${skewTaskInfoExec.toString()}")
     stageInfoValue.meanTaskCompletionTime = meanTaskCompletionTime.toLong
-    stageInfoValue.skewTaskInfo = if (skewTaskInfo.nonEmpty) {
+    stageInfoValue.skewTaskInfo =
+      if (skewTaskInfo.nonEmpty && taskInfoValue.length > 1
+        && skewTaskInfo.length != taskInfoValue.length) {
       Some(skewTaskInfo)
     } else {
       None
