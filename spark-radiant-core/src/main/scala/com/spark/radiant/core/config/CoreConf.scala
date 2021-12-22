@@ -29,10 +29,14 @@ object CoreConf {
     sparkConf.getLong("spark.core.time.task.completion", 5000L)
   }
 
-  private [core] def getCleanUpStageInfo(sparkConf: SparkConf): Long = {
+  private [core] def getCleanUpStageInfo(sparkConf: SparkConf): Int = {
     // default value is 10
-    sparkConf.getInt("spark.core.clean.stage.Info", 10)
+    sparkConf.getInt("spark.core.clean.stage.info", 10)
   }
 
+  private [core] def getMaxStageInfo(sparkConf: SparkConf): Int = {
+    // default value is 30
+    sparkConf.getInt("spark.core.max.stage.info", 30)
+  }
 
 }

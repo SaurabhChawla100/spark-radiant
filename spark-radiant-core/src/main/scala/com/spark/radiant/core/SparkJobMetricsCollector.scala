@@ -40,11 +40,11 @@ class SparkJobMetricsCollector()
   private val stageInfoMap: LinkedHashMap[Long, StageInfo] = LinkedHashMap.empty
   private val taskInfoMap: HashMap[Long, Seq[TaskInfo]] = HashMap.empty
   private var startTime: Long = 0
-  private val maxStageInfo: Int = 50
   private val sparkConf = SparkSession.getActiveSession match {
     case Some(spark) => spark.sparkContext.getConf
     case _ => new SparkConf()
   }
+  private val maxStageInfo: Int = CoreConf.getMaxStageInfo(sparkConf)
 
   // TODO work on this feature
 
@@ -62,13 +62,17 @@ class SparkJobMetricsCollector()
   }
 
   override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
-   val stageInfo = stageSubmitted.stageInfo
-    if (stageInfoMap.size == maxStageInfo) {
-      // clean up n number of stage info given as per conf spark.core.clean.stage.Info
-      val stageCleanUp = CoreConf.getCleanUpStageInfo(sparkConf)
-      val itr = stageInfoMap.iterator
-      for(clean <- 1 to stageCleanUp) {
-        stageInfoMap.remove(itr.next()._1)
+    val stageInfo = stageSubmitted.stageInfo
+    // synchronized block needed to handle parallel stage submitted at same time
+    synchronized {
+      if (stageInfoMap.size == maxStageInfo) {
+        showStageLevelMetrics()
+        // clean up n number of stage info given as per conf spark.core.clean.stage.info
+        val stageCleanUp = CoreConf.getCleanUpStageInfo(sparkConf)
+        val itr = stageInfoMap.iterator
+        for (_ <- 1 to stageCleanUp) {
+          stageInfoMap.remove(itr.next()._1)
+        }
       }
     }
     stageInfoMap.put(stageInfo.stageId,
