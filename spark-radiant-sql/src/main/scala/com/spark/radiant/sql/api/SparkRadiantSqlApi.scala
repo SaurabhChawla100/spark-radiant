@@ -28,6 +28,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.sparkRadiantUtil.SparkSqlUtil
 
+import scala.collection.mutable
 import scala.collection.mutable.Map
 
 /**
@@ -140,6 +141,35 @@ class SparkRadiantSqlApi extends Logging with Serializable {
       case ex: Throwable =>
         throw ex
     }
+  }
+
+  /**
+   * Drop duplicate for the StructType Column
+   * @param dataFrame - existing DataFrame
+   * @param spark - existing sparkSession
+   * @param colNames - sequence of ColumnName for the DropDuplicate
+   *
+   * [SPARK-37596][SQL] Add the support for struct type column in the DropDuplicate #34849
+   */
+  def dropDuplicateOfSpark(dataFrame: DataFrame,
+     spark: SparkSession,
+     colNames: Seq[String]): DataFrame = {
+    val resolver = spark.sessionState.analyzer.resolver
+    val allColumns = dataFrame.queryExecution.analyzed.output
+    // get the struct column from the dropDuplicate colNames
+    val structMap: mutable.Map[String, Column] = mutable.LinkedHashMap.empty
+    colNames.foreach { x =>
+      if (!allColumns.exists(i => resolver(i.name, x))) {
+        structMap.put(x, new org.apache.spark.sql.Column(x))
+      }
+    }
+    val updatedDF =  if (structMap.nonEmpty) {
+      useWithColumnsOfSpark(structMap, dataFrame)
+    } else {
+      dataFrame
+    }
+    updatedDF.dropDuplicates(colNames).
+      select(allColumns.map(new org.apache.spark.sql.Column(_)): _*)
   }
 
   /**

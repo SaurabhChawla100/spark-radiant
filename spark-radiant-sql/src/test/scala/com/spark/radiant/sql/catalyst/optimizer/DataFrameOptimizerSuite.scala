@@ -18,7 +18,7 @@
 package com.spark.radiant.sql.catalyst.optimizer
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.TypedFilter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.must.Matchers
@@ -136,4 +136,16 @@ class DataFrameOptimizerSuite extends AnyFunSuite
     val updateDFPlan = updatedPlan.find{ x => x.isInstanceOf[TypedFilter] }
     assert(updateDFPlan.isEmpty)
   }
+
+  test("test struct type column in the DropDuplicate") {
+    import com.spark.radiant.sql.api.SparkRadiantSqlApi
+    val df = spark.createDataFrame(Seq(("d1", StructDropDup(1, 2)),
+      ("d1", StructDropDup(1, 2)))).toDF("a", "b")
+    val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+    val updatedDF = sparkRadiantSqlApi.dropDuplicateOfSpark(df, spark, Seq("a", "b.c1"))
+    assert(updatedDF.collect===Array(Row("d1", Row(1, 2))))
+  }
+
 }
+
+case class StructDropDup(c1: Int, c2: Int)

@@ -125,7 +125,61 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
         val withColMap = scala.collection.mutable.LinkedHashMap("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
         val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
 
-   d) **UnionReuseExchangeOptimizeRule** - This rule works for scenarios when union is
+   d) **Add the support for struct type column in the DropDuplicate** - Till now on using the struct col
+      in the DropDuplicate we will get the below exception.
+                    
+        `
+            case class StructDropDup(c1: Int, c2: Int)
+            val df = Seq(("d1", StructDropDup(1, 2)),
+            ("d1", StructDropDup(1, 2))).toDF("a", "b")
+            df.dropDuplicates("a", "b.c1")
+         
+            org.apache.spark.sql.AnalysisException: Cannot resolve column name "b.c1" among (a, b)
+            at org.apache.spark.sql.Dataset.$anonfun$dropDuplicates$1(Dataset.scala:2576)
+            at scala.collection.TraversableLike.$anonfun$flatMap$1(TraversableLike.scala:245)
+            at scala.collection.Iterator.foreach(Iterator.scala:941)
+            at scala.collection.Iterator.foreach$(Iterator.scala:941)
+            at scala.collection.AbstractIterator.foreach(Iterator.scala:1429)
+        `
+      
+      Added the support to use the struct col in the DropDuplicate
+   
+         `
+            import com.spark.radiant.sql.api.SparkRadiantSqlApi
+            case class StructDropDup(c1: Int, c2: Int)
+            val df = Seq(("d1", StructDropDup(1, 2)),
+            ("d1", StructDropDup(1, 2))).toDF("a", "b")
+            val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+            val updatedDF = sparkRadiantSqlApi.dropDuplicateOfSpark(df, spark, Seq("a", "b.c1"))
+               
+            updatedDF.show
+               +---+------+
+               |  a|     b|
+               +---+------+
+               | d1|{1, 2}|
+               +---+------+
+   
+         `
+      The same support is added in this PR in Apache Spark
+      [SPARK-37596][SQL] Add the support for struct type column in the DropDuplicate
+   
+      This works well for the map type column in the dropDuplicate
+      
+       `
+         
+         val df = spark.createDataFrame(Seq(("d1", Map(1 -> 2)), ("d1", Map(1 -> 2))))
+         val updatedDF = sparkRadiantSqlApi.dropDuplicateOfSpark(df, spark, Seq("_2.1"))
+         updatedDF.show
+         
+         +---+--------+
+         | _1|      _2|
+         +---+--------+
+         | d1|{1 -> 2}|
+         +---+--------+
+      
+      `
+
+   e) **UnionReuseExchangeOptimizeRule** - This rule works for scenarios when union is
       present with aggregation having same grouping column. The union is between the same table/datasource.
       In this scenario instead of scan twice the table/datasource because of the child of Union,
       There will be one scan of table/datasource, and the other child of union will reuse this scan.This feature is enabled
@@ -156,7 +210,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    
       ```
 
-   e) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
+   f) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
       present and also the exchange which is introduced by SMJ and other join that add the shuffle exchange, So in total
       there are 2 exchange present in the executed plan and cost of creating both exchange are almost same. In that scenario
       we skip the exchange created by the partial aggregate and there will be only one exchange and partial and complete
@@ -187,7 +241,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ```
    
-   f) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
+   g) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
    So there will be exchange after partial aggregation and there are scenarios where cost of partial aggregate + exchange
    is high. In those scenarios it's better to have exchange first and then apply both partial aggregate and complete
    aggregate on the exchange. This can be enabled using --conf spark.sql.optimize.explode.rule=true
@@ -215,7 +269,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ```
 
-   g)  **BloomFilter Index** - This is WIP
+   h)  **BloomFilter Index** - This is WIP
 
 2) **spark-radiant-core** - This contains the optimization related to total cost optimization.
    
