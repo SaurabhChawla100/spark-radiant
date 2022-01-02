@@ -129,20 +129,9 @@
                 <scope>provided</scope>
             </dependency>
             <dependency>
-                <groupId>org.apache.hive</groupId>
-                <artifactId>hive-exec</artifactId>
-                <version>2.3.9</version>
-                <scope>provided</scope>
-            </dependency>
-            <dependency>
                 <groupId>com.github.scopt</groupId>
                 <artifactId>scopt_${scala.binary.version}</artifactId>
                 <version>3.5.0</version>
-            </dependency>
-            <dependency>
-                <groupId>net.liftweb</groupId>
-                <artifactId>lift-json_${scala.binary.version}</artifactId>
-                <version>3.3.0</version>
             </dependency>
             <!--
              This is needed by the scalatest plugin, and so is declared here to be available in
