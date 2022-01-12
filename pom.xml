@@ -27,6 +27,7 @@
         <hadoop.version>3.1.4</hadoop.version>
         <test.java.home>${java.home}</test.java.home>
         <CodeCacheSize>1g</CodeCacheSize>
+        <scala-logging.version>3.9.4</scala-logging.version>
         <test.exclude.tags></test.exclude.tags>
         <test.include.tags></test.include.tags>
     </properties>
@@ -58,16 +59,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.typesafe</groupId>
-            <artifactId>config</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.typesafe.scala-logging</groupId>
-            <artifactId>scala-logging_${scala.binary.version}</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.scalatest</groupId>
@@ -101,14 +95,9 @@
                 <scope>provided</scope>
             </dependency>
             <dependency>
-                <groupId>com.typesafe</groupId>
-                <artifactId>config</artifactId>
-                <version>1.3.2</version>
-            </dependency>
-            <dependency>
                 <groupId>com.typesafe.scala-logging</groupId>
                 <artifactId>scala-logging_${scala.binary.version}</artifactId>
-                <version>3.9.4</version>
+                <version>${scala-logging.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.scala-lang</groupId>

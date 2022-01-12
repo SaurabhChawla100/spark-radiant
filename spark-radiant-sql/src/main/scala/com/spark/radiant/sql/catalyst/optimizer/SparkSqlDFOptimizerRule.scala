@@ -18,8 +18,8 @@
 package com.spark.radiant.sql.catalyst.optimizer
 
 import com.spark.radiant.sql.utils.SparkSqlUtils
+import com.typesafe.scalalogging.LazyLogging
 
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
   ConcatWs, EqualTo, Expression, In, Literal, Or}
@@ -38,7 +38,7 @@ import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, SparkSession}
 import org.apache.spark.util.sketch.BloomFilter
 
-private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
+private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable {
   val bloomFilterKey = "dynamicFilterBloomFilterKey"
   val fpp = 0.02
   val dfKeySeparator = "~#~"
@@ -297,7 +297,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
           inMemoryRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
     }
-    logDebug(s"optimized DynamicFilteredPlan:: ${updatedDynamicFilteredPlan}")
+    logger.debug(s"optimized DynamicFilteredPlan:: ${updatedDynamicFilteredPlan}")
     updatedDynamicFilteredPlan
   }
 
@@ -361,7 +361,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
   private def getOptimizedLogicalPlan(
      plan: LogicalPlan,
      bloomFilterCount: Long)(implicit spark: SparkSession): LogicalPlan = {
-    logDebug("Initial plan: "+ plan)
+    logger.debug("Initial plan: "+ plan)
     val updatedPlan = plan.transform {
       case join: Join if validJoinForDynamicFilter(join.joinType) =>
         var joinCondition: Option[Expression] = None
@@ -411,14 +411,14 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
                 rtPlan, rtPlan.output, bloomFilterCount, joinAttr)
             }
             val updatedJoin = Join(ltPlan, rtPlan, join.joinType, join.condition, join.hint)
-            logDebug(s"updatedJoin after applying DF :: ${updatedJoin}")
+            logger.debug(s"updatedJoin after applying DF :: ${updatedJoin}")
             updatedJoin
           }
         } else {
           join
         }
     }
-    logDebug(s"updatedPlan after applying DF : ${updatedPlan}")
+    logger.debug(s"updatedPlan after applying DF : ${updatedPlan}")
     updatedPlan
   }
 
@@ -490,7 +490,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
       }
     } catch {
       case ex: Throwable =>
-        logDebug(s"exception while creating pushDownFilterToV2Scan: $ex")
+        logger.debug(s"exception while creating pushDownFilterToV2Scan: $ex")
         plan
     }
   }
@@ -504,7 +504,7 @@ private[sql] class SparkSqlDFOptimizerRule extends Logging with Serializable {
     }
     catch {
       case ex : Throwable =>
-        logDebug(s"exception while creating the addDynamicFiltersPlan: ${ex}")
+        logger.debug(s"exception while creating the addDynamicFiltersPlan: ${ex}")
         throw ex
     }
   }

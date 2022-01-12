@@ -18,8 +18,9 @@
 package com.spark.radiant.core
 
 import com.spark.radiant.core.config.CoreConf
+import com.typesafe.scalalogging.LazyLogging
+
 import org.apache.spark.SparkConf
-import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.SparkSession
 
@@ -34,7 +35,7 @@ import scala.collection.mutable.LinkedHashMap
  */
 
 class SparkJobMetricsCollector()
-  extends SparkListener with Logging {
+  extends SparkListener with LazyLogging {
 
   private val jobInfoMap: HashMap[Long, JobInfo] = HashMap.empty
   private val stageInfoMap: LinkedHashMap[Long, StageInfo] = LinkedHashMap.empty
@@ -109,11 +110,11 @@ class SparkJobMetricsCollector()
       taskInfo =>
         (taskInfo._1/meanTaskProcessByExec) >= (20 * meanTaskProcessByExec)/100
     }
-    logInfo(s"Stage Info Metrics stageId :: ${stageInfo.stageId}")
-    logInfo(s"Average Completion time taken by task :: ${meanTaskCompletionTime}")
-    logInfo(s"processing task info on executor:: ${executorGroupByTask.toString()}")
-    logInfo(s"skewTaskInfo based on the task processed:${skewTaskInfo}")
-    logInfo(s"skewTaskInfoExec based on the task processed on each executor :" +
+    logger.info(s"Stage Info Metrics stageId :: ${stageInfo.stageId}")
+    logger.info(s"Average Completion time taken by task :: ${meanTaskCompletionTime}")
+    logger.info(s"processing task info on executor:: ${executorGroupByTask.toString()}")
+    logger.info(s"skewTaskInfo based on the task processed:${skewTaskInfo}")
+    logger.info(s"skewTaskInfoExec based on the task processed on each executor :" +
       s" ${skewTaskInfoExec.toString()}")
     stageInfoValue.meanTaskCompletionTime = meanTaskCompletionTime.toLong
     stageInfoValue.skewTaskInfo =

@@ -17,7 +17,8 @@
 
 package com.spark.radiant.sql.catalyst.optimizer
 
-import org.apache.spark.internal.Logging
+import com.typesafe.scalalogging.LazyLogging
+
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -35,7 +36,7 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
  * There will be one scan and the other child of union will reuse this scan.This feature is
  * enabled using --conf spark.sql.optimize.union.reuse.exchange.rule=true
  */
-object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
+object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with LazyLogging {
   def apply(plan: LogicalPlan): LogicalPlan = {
     val spark = SparkSession.getActiveSession.get
     if (useUnionReuseExchangeRule(spark)) {
@@ -62,7 +63,7 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with Logging {
         }
       } catch {
         case ex: AnalysisException =>
-          logDebug(s"exception on applying UnionReuseExchangeOptimizeRule: ${ex}")
+          logger.debug(s"exception on applying UnionReuseExchangeOptimizeRule: ${ex}")
           plan
       }
     } else {

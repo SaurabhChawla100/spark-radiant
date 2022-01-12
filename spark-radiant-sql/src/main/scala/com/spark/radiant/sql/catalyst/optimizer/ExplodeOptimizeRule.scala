@@ -17,10 +17,11 @@
 
 package com.spark.radiant.sql.catalyst.optimizer
 
-import org.apache.spark.internal.Logging
+import com.typesafe.scalalogging.LazyLogging
+
 import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Generate, LogicalPlan,
-  Repartition, RepartitionByExpression}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter,
+  Generate, LogicalPlan, Repartition, RepartitionByExpression}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.expressions.Explode
 
@@ -32,7 +33,7 @@ import org.apache.spark.sql.catalyst.expressions.Explode
  * partial aggregate and complete aggregate on the exchange.
  *
  */
-object ExplodeOptimizeRule extends Rule[LogicalPlan] with Logging {
+object ExplodeOptimizeRule extends Rule[LogicalPlan] with LazyLogging {
   def apply(plan: LogicalPlan): LogicalPlan = {
     val spark = SparkSession.getActiveSession.get
     if (useExplodeOptRule(spark)) {
@@ -52,7 +53,7 @@ object ExplodeOptimizeRule extends Rule[LogicalPlan] with Logging {
         }
       } catch {
         case ex: AnalysisException =>
-          logDebug(s"exception on applying ExplodeOptimizeRule: ${ex}")
+          logger.debug(s"exception on applying ExplodeOptimizeRule: ${ex}")
           plan
       }
     }

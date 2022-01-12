@@ -17,6 +17,8 @@
 
 package com.spark.radiant.sql.catalyst.optimizer
 
+import com.typesafe.scalalogging.LazyLogging
+
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
@@ -41,7 +43,7 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
  * This is enabled by the conf --conf spark.sql.support.sizebased.join.reorder=true
  *
  */
-object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
+object SizeBasedJoinReOrdering extends Rule[LogicalPlan] with LazyLogging {
   def apply(plan: LogicalPlan): LogicalPlan = {
     try {
       val spark = SparkSession.getActiveSession.get
@@ -90,7 +92,7 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] {
       }
     } catch {
       case ex: AnalysisException =>
-        logDebug(s"Not able to create SizeBasedJoinReOrdering: ${ex}")
+        logger.debug(s"Not able to create SizeBasedJoinReOrdering: ${ex}")
         plan
     }
   }

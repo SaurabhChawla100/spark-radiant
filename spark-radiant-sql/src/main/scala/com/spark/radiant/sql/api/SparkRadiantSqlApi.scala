@@ -19,10 +19,10 @@ package com.spark.radiant.sql.api
 
 import com.spark.radiant.sql.catalyst.optimizer.SparkSqlDFOptimizerRule
 import com.spark.radiant.sql.utils.SparkSqlUtils
+import com.typesafe.scalalogging.LazyLogging
 
 import java.util.concurrent.TimeUnit
 
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions}
@@ -35,7 +35,7 @@ import scala.collection.mutable.Map
  * SparkRadiantSqlApi having list of methods that are exposed to users
  */
 
-class SparkRadiantSqlApi extends Logging with Serializable {
+class SparkRadiantSqlApi extends LazyLogging with Serializable {
 
   private[api] val seqRule: Seq[Rule[LogicalPlan]] =
     Seq(com.spark.radiant.sql.catalyst.optimizer.SizeBasedJoinReOrdering,
@@ -81,7 +81,7 @@ class SparkRadiantSqlApi extends Logging with Serializable {
     }
     catch {
       case ex: Throwable =>
-        logDebug(s"exception while creating Dynamic Filter: ${ex}")
+        logger.debug(s"exception while creating Dynamic Filter: ${ex}")
     }
     finally {
       dfCollectThread.shutdown()
