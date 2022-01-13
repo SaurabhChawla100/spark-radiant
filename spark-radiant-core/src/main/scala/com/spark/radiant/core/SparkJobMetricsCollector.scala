@@ -20,7 +20,7 @@ package com.spark.radiant.core
 import com.spark.radiant.core.config.CoreConf
 import com.typesafe.scalalogging.LazyLogging
 
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkCoreUtils, TaskFailedReason}
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.SparkSession
 
@@ -64,6 +64,7 @@ class SparkJobMetricsCollector()
 
   override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
     val stageInfo = stageSubmitted.stageInfo
+    val stageStatus = SparkCoreUtils.getStageStatus(stageInfo)
     // synchronized block needed to handle parallel stage submitted at same time
     synchronized {
       if (stageInfoMap.size == maxStageInfo) {
@@ -77,13 +78,14 @@ class SparkJobMetricsCollector()
       }
     }
     stageInfoMap.put(stageInfo.stageId,
-      StageInfo(stageInfo.stageId, stageInfo.numTasks, stageInfo.submissionTime.get))
+      StageInfo(stageInfo.stageId, stageInfo.numTasks, stageInfo.submissionTime.get, stageStatus))
   }
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
     val stageInfo = stageCompleted.stageInfo
     val stageInfoValue = stageInfoMap.getOrElseUpdate(stageInfo.stageId,
       StageInfo(stageInfo.stageId, 0))
+    val stageStatus = SparkCoreUtils.getStageStatus(stageInfo)
     stageInfoValue.stageEndTime = stageInfo.completionTime.get
     val taskInfoValue: Seq[TaskInfo] = taskInfoMap(stageInfo.stageId)
     val executorGroupByTask =
@@ -97,7 +99,10 @@ class SparkJobMetricsCollector()
     val meanTaskRecordsProcess =
       Math.floor(taskInfo.map(_._1).sum / taskInfo.size)
     val meanTaskCompletionTime = Math.floor(taskInfo.map(_._2).sum / taskInfo.size)
-    val skewTaskInfo = taskInfoValue.filter {
+    val (taskInfoSuccess, failedTaskInfo) = taskInfoValue.partition {
+      taskInfo => taskInfo.taskStatus.equalsIgnoreCase("SUCCESS")
+    }
+    val skewTaskInfo = taskInfoSuccess.filter {
       taskInfo =>
         ((taskInfo.recordsRead/meanTaskRecordsProcess) >=
           (CoreConf.getPercentMeanRecordProcessed(sparkConf) * meanTaskRecordsProcess)/100
@@ -124,6 +129,12 @@ class SparkJobMetricsCollector()
     } else {
       None
     }
+    stageInfoValue.failedTaskInfo = if (failedTaskInfo.nonEmpty) {
+      Some(failedTaskInfo)
+    } else {
+      None
+    }
+    stageInfoValue.stageStatus = stageStatus
     stageInfoValue.numberOfExecutor = executorGroupByTask.size
     stageInfoMap.put(stageInfo.stageId, stageInfoValue)
     taskInfoMap.drop(stageInfo.stageId)
@@ -132,6 +143,10 @@ class SparkJobMetricsCollector()
   override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = synchronized {
     val stageId = taskEnd.stageId
     val taskInfo = taskEnd.taskInfo
+    val failedTaskEndReason = taskEnd.reason match {
+      case reason: TaskFailedReason => reason.toErrorString
+      case _ => "NA"
+    }
     val taskInputMetrics = taskEnd.taskMetrics.inputMetrics
     val taskOutputMetrics = taskEnd.taskMetrics.outputMetrics
     val taskShuffleReadRecords = taskEnd.taskMetrics.shuffleReadMetrics
@@ -142,7 +157,7 @@ class SparkJobMetricsCollector()
       taskInputMetrics.recordsRead + taskShuffleWriteRecords.recordsWritten,
       taskShuffleWriteRecords.recordsWritten, taskInfo.executorId,
       taskShuffleReadRecords.recordsRead, taskOutputMetrics.recordsWritten,
-      taskInfo.finishTime - taskInfo.launchTime)
+      taskInfo.finishTime - taskInfo.launchTime, taskInfo.status, failedTaskEndReason)
 
     if (taskInfoSeq.nonEmpty) {
       taskInfoSeq = taskInfoSeq :+ info
@@ -196,7 +211,7 @@ class SparkJobMetricsCollector()
     val itr = stageInfoMap.iterator
     while(itr.hasNext) {
       val stageInfo = itr.next
-      println(s"Stage Info Metrics Stage Id:${stageInfo._1}")
+      println(s"***** Stage Info Metrics Stage Id:${stageInfo._1} *****")
       println(stageInfo._2)
     }
     println()
@@ -209,10 +224,12 @@ case class StageInfo (
    stageId: Long = -1L,
    var totalTask: Long = 0L,
    var stageStart: Long = 0L,
+   var stageStatus: String = "",
    var stageEndTime: Long = 0L,
    var meanTaskCompletionTime: Long = 0L,
    var numberOfExecutor: Long = 0L,
-   var skewTaskInfo: Option[Seq[TaskInfo]] = None) {
+   var skewTaskInfo: Option[Seq[TaskInfo]] = None,
+   var failedTaskInfo: Option[Seq[TaskInfo]] = None) {
 
   override def toString(): String = {
     val stageCompletionTime = stageEndTime - stageStart
@@ -221,13 +238,22 @@ case class StageInfo (
     } else {
       "Skew task in not present in this stage"
     }
+    val (failedTaskInfoValue, failedTaskCount) = if (failedTaskInfo.isDefined) {
+      val failedTask = failedTaskInfo.get
+      (failedTask.toString(), failedTask.size)
+    } else {
+      ("Failed task in not present in this stage", 0)
+    }
     s"""{
        | "Stage Id": ${stageId},
+       | "Final Stage Status": ${stageStatus},
        | "Number of Task": ${totalTask},
        | "Total Executors ran to complete all Task": ${numberOfExecutor},
        | "Stage Completion Time": ${stageCompletionTime} ms,
        | "Average Task Completion Time": ${meanTaskCompletionTime} ms
+       | "Number of Task Failed in this Stage": ${failedTaskCount}
        | "Stage Skew info": ${skewTaskInfoValue}
+       | "Failed task info in Stage": ${failedTaskInfoValue}
     }""".stripMargin
   }
 }
@@ -239,7 +265,9 @@ case class TaskInfo (
    executorId: String = "0",
    shuffleReadRecord: Long = -1L,
    recordsWrite: Long = -1L,
-   taskCompletionTime: Long = 0L) {
+   taskCompletionTime: Long = 0L,
+   taskStatus: String,
+   failedTaskEndReason: String) {
 
   override def toString(): String = {
     s"""{
@@ -249,7 +277,9 @@ case class TaskInfo (
        | "Number of shuffle read Record in task": ${shuffleReadRecord},
        | "Number of records write in task": ${recordsWrite},
        | "Number of shuffle write Record in task": ${shuffleWriteRecord},
-       | "Task Completion Time": ${taskCompletionTime} ms
+       | "Task Completion Time": ${taskCompletionTime} ms,
+       | "Final Status of task": ${taskStatus},
+       | "Failure Reason for task": ${failedTaskEndReason}
     }""".stripMargin
   }
 }

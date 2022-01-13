@@ -121,7 +121,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
         val withColMap = scala.collection.mutable.Map("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
         val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
 
-        if sequence of the column needs to be maintained, then use the LinkedHashMap
+        // if sequence of the column needs to be maintained, then use the LinkedHashMap
         val withColMap = scala.collection.mutable.LinkedHashMap("newCol" -> lit("someval"), "newCol1" -> lit("someval1"), "newCol2" -> lit("someval2"))
         val df1 = sparkRadiantSqlApi.useWithColumnsOfSpark(withColMap, inputDF)
 
@@ -287,31 +287,39 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    Percentage of time spend in the Driver: 34. Try adding more parallelism to the Spark job for Optimal Performance
    
    *****Stage Info Metrics*****
-   Stage Info Metrics Stage Id:0
+   ***** Stage Info Metrics Stage Id:0 *****
    {
    "Stage Id": 0,
+   "Final Stage Status": succeeded,
    "Number of Task": 10,
    "Total Executors ran to complete all Task": 2,
    "Stage Completion Time": 858 ms,
    "Average Task Completion Time": 139 ms
+   "Number of Task Failed in this Stage": 0
    "Stage Skew info": Skew task in not present in this stage
+   "Failed task info in Stage": Failed task in not present in this stage
    }
-   Stage Info Metrics Stage Id:1
+   ***** Stage Info Metrics Stage Id:1 *****
    {
    "Stage Id": 1,
+   "Final Stage Status": succeeded,
    "Number of Task": 10,
    "Total Executors ran to complete all Task": 2,
    "Stage Completion Time": 53 ms,
    "Average Task Completion Time": 9 ms
+   "Number of Task Failed in this Stage": 0
    "Stage Skew info": Skew task in not present in this stage
+   "Failed task info in Stage": Failed task in not present in this stage
    }
-   Stage Info Metrics Stage Id:2
+   ***** Stage Info Metrics Stage Id:2 *****
    {
    "Stage Id": 2,
+   "Final Stage Status": succeeded,
    "Number of Task": 100,
    "Total Executors ran to complete all Task": 4,
    "Stage Completion Time": 11206 ms,
    "Average Task Completion Time": 221 ms
+   "Number of Task Failed in this Stage": 0
    "Stage Skew info": List({
    "Task Id": 0,
    "Executor Id": 3,
@@ -320,6 +328,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Number of records write": 0,
    "Number of shuffle write Record": 0,
    "Task Completion Time": 10656 ms
+   "Final Status of task": SUCCESS
+   "Failure Reason for task": NA
    }, {
    "Task Id": 4,
    "Executor Id": 1,
@@ -328,6 +338,35 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Number of records write": 0,
    "Number of shuffle write Record": 0,
    "Task Completion Time": 10013 ms
+   "Final Status of task": SUCCESS
+   "Failure Reason for task": NA
+   })
+   "Failed task info in Stage": Failed task in not present in this stage
+   }
+   ***** Stage Info Metrics Stage Id:3 *****
+   {
+   "Stage Id": 3,
+   "Final Stage Status": failed,
+   "Number of Task": 10,
+   "Total Executors ran to complete all Task": 2,
+   "Stage Completion Time": 53 ms,
+   "Average Task Completion Time": 9 ms
+   "Number of Task Failed in this Stage": 1
+   "Stage Skew info": Skew task in not present in this stage
+   "Failed task info in Stage": List({
+   "Task Id": 12,
+   "Executor Id": 1,
+   "Number of records read in task": 0,
+   "Number of shuffle read Record in task": 0,
+   "Number of records write in task": 0,
+   "Number of shuffle write Record in task": 0,
+   "Final Status of task": FAILED,
+   "Task Completion Time": 7 ms,
+   "Failure Reason for task": java.lang.Exception: Retry Task
+         at $line14.$read$$iw$$iw$$iw$$iw$$iw$$iw$$iw$$iw.$anonfun$res0$1(<console>:33)
+         at scala.runtime.java8.JFunction1$mcII$sp.apply(JFunction1$mcII$sp.java:23)
+         at scala.collection.Iterator$$anon$10.next(Iterator.scala:461)
+         at scala.collection.Iterator$$anon$10.next(Iterator.scala:461)
    })
    }
     ```
