@@ -115,11 +115,11 @@ class SparkJobMetricsCollector()
       taskInfo =>
         (taskInfo._1/meanTaskProcessByExec) >= (20 * meanTaskProcessByExec)/100
     }
-    logger.info(s"Stage Info Metrics stageId :: ${stageInfo.stageId}")
-    logger.info(s"Average Completion time taken by task :: ${meanTaskCompletionTime}")
-    logger.info(s"processing task info on executor:: ${executorGroupByTask.toString()}")
-    logger.info(s"skewTaskInfo based on the task processed:${skewTaskInfo}")
-    logger.info(s"skewTaskInfoExec based on the task processed on each executor :" +
+    logger.debug(s"Stage Info Metrics stageId :: ${stageInfo.stageId}")
+    logger.debug(s"Average Completion time taken by task :: ${meanTaskCompletionTime}")
+    logger.debug(s"processing task info on executor:: ${executorGroupByTask.toString()}")
+    logger.debug(s"skewTaskInfo based on the task processed:${skewTaskInfo}")
+    logger.debug(s"skewTaskInfoExec based on the task processed on each executor :" +
       s" ${skewTaskInfoExec.toString()}")
     stageInfoValue.meanTaskCompletionTime = meanTaskCompletionTime.toLong
     stageInfoValue.skewTaskInfo =
@@ -212,7 +212,41 @@ class SparkJobMetricsCollector()
     while(itr.hasNext) {
       val stageInfo = itr.next
       println(s"***** Stage Info Metrics Stage Id:${stageInfo._1} *****")
-      println(stageInfo._2)
+      // To display all the failed task, skew task info in the metrics,
+      // set --conf spark.core.display.all.task.info=true
+      val displayAllTaskInfo = CoreConf.getAllEntryFromTaskInfo(sparkConf)
+      val stageInfoValue = stageInfo._2
+      if (!displayAllTaskInfo) {
+        // Display top N entry for the failed task, skew task info in the metrics,
+        // default value is set to 10, to set the higher value add the conf
+        // --conf spark.core.display.limit.task.info=20
+        val displayLimitTaskInfo = CoreConf.getTopEntryTaskInfo(sparkConf)
+        val skewInfoValue = stageInfoValue.skewTaskInfo
+        val skewTaskInfoValue = if (skewInfoValue.isDefined) {
+          if (skewInfoValue.get.size > displayLimitTaskInfo) {
+            Some(SparkCoreUtils.getFewEntryFromList[TaskInfo](skewInfoValue.get.toList,
+              displayLimitTaskInfo))
+          } else {
+            skewInfoValue
+          }
+        } else {
+          skewInfoValue
+        }
+        stageInfoValue.skewTaskInfo = skewTaskInfoValue
+        val taskFailInfoValue = stageInfoValue.failedTaskInfo
+        val failedTaskInfoValue = if (taskFailInfoValue.isDefined) {
+          if (taskFailInfoValue.get.size > displayLimitTaskInfo) {
+            Some(SparkCoreUtils.getFewEntryFromList[TaskInfo](taskFailInfoValue.get.toList,
+              displayLimitTaskInfo))
+          } else {
+            taskFailInfoValue
+          }
+        } else {
+          taskFailInfoValue
+        }
+        stageInfoValue.failedTaskInfo = failedTaskInfoValue
+      }
+      println(stageInfoValue)
     }
     println()
   }

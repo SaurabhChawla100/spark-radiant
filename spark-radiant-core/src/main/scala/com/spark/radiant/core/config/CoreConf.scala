@@ -39,4 +39,14 @@ object CoreConf {
     sparkConf.getInt("spark.core.max.stage.info", 30)
   }
 
+  private [core] def getTopEntryTaskInfo(sparkConf: SparkConf): Int = {
+    // default value is 10
+    sparkConf.getInt("spark.core.display.limit.task.info", 10)
+  }
+
+  private [core] def getAllEntryFromTaskInfo(sparkConf: SparkConf): Boolean = {
+    // default value is false
+    sparkConf.getBoolean("spark.core.display.all.task.info", false)
+  }
+
 }

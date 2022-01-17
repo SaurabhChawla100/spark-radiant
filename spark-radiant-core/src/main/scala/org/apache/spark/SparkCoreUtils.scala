@@ -34,4 +34,17 @@ object SparkCoreUtils {
     stageInfo.getStatusString
   }
 
+  /**
+   * @return the top few entry from the list based on the specified limit
+   */
+  def getFewEntryFromList[T](inputList: List[T], limit: Int): List[T] = {
+    var topNEntryFromList: List[T] = List.empty
+    var i = 0
+    while(i != limit) {
+      topNEntryFromList :+= inputList(i)
+      i += 1
+    }
+    topNEntryFromList
+  }
+
 }
