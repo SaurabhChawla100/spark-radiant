@@ -68,13 +68,16 @@ class SparkJobMetricsCollector()
     // synchronized block needed to handle parallel stage submitted at same time
     synchronized {
       if (stageInfoMap.size == maxStageInfo) {
-        showStageLevelMetrics()
         // clean up n number of stage info given as per conf spark.core.clean.stage.info
         val stageCleanUp = CoreConf.getCleanUpStageInfo(sparkConf)
+        val stageInfoMapDisplay: LinkedHashMap[Long, StageInfo] = LinkedHashMap.empty
         val itr = stageInfoMap.iterator
         for (_ <- 1 to stageCleanUp) {
-          stageInfoMap.remove(itr.next()._1)
+          val next = itr.next()
+          stageInfoMapDisplay.put(next._1, next._2)
+          stageInfoMap.remove(next._1)
         }
+        showStageLevelMetrics(stageInfoMapDisplay)
       }
     }
     stageInfoMap.put(stageInfo.stageId,
@@ -130,6 +133,7 @@ class SparkJobMetricsCollector()
       None
     }
     stageInfoValue.failedTaskInfo = if (failedTaskInfo.nonEmpty) {
+      stageInfoValue.failedTaskCount = failedTaskInfo.size
       Some(failedTaskInfo)
     } else {
       None
@@ -178,7 +182,7 @@ class SparkJobMetricsCollector()
     println(s"Total Time taken by Application:: $completionTime sec")
     println()
     showDriverMetrics(completionTime)
-    showStageLevelMetrics()
+    showStageLevelMetrics(stageInfoMap)
   }
 
   private def addSkewTaskInfo(): Unit = {
@@ -205,7 +209,7 @@ class SparkJobMetricsCollector()
     println()
   }
 
-  private def showStageLevelMetrics(): Unit = {
+  private def showStageLevelMetrics(stageInfoMap: LinkedHashMap[Long, StageInfo]): Unit = {
     // scalastyle:off println
     println("*****Stage Info Metrics*****")
     val itr = stageInfoMap.iterator
@@ -262,6 +266,7 @@ case class StageInfo (
    var stageEndTime: Long = 0L,
    var meanTaskCompletionTime: Long = 0L,
    var numberOfExecutor: Long = 0L,
+   var failedTaskCount: Long = 0L,
    var skewTaskInfo: Option[Seq[TaskInfo]] = None,
    var failedTaskInfo: Option[Seq[TaskInfo]] = None) {
 
@@ -272,11 +277,10 @@ case class StageInfo (
     } else {
       "Skew task in not present in this stage"
     }
-    val (failedTaskInfoValue, failedTaskCount) = if (failedTaskInfo.isDefined) {
-      val failedTask = failedTaskInfo.get
-      (failedTask.toString(), failedTask.size)
+    val failedTaskInfoValue = if (failedTaskInfo.isDefined) {
+      failedTaskInfo.get.toString()
     } else {
-      ("Failed task in not present in this stage", 0)
+      "Failed task in not present in this stage"
     }
     s"""{
        | "Stage Id": ${stageId},
@@ -286,8 +290,8 @@ case class StageInfo (
        | "Stage Completion Time": ${stageCompletionTime} ms,
        | "Average Task Completion Time": ${meanTaskCompletionTime} ms
        | "Number of Task Failed in this Stage": ${failedTaskCount}
-       | "Stage Skew info": ${skewTaskInfoValue}
-       | "Failed task info in Stage": ${failedTaskInfoValue}
+       | "Few Skew task info in Stage": ${skewTaskInfoValue}
+       | "Few Failed task info in Stage": ${failedTaskInfoValue}
     }""".stripMargin
   }
 }

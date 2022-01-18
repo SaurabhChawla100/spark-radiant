@@ -31,7 +31,7 @@ object CoreConf {
 
   private [core] def getCleanUpStageInfo(sparkConf: SparkConf): Int = {
     // default value is 10
-    sparkConf.getInt("spark.core.clean.stage.info", 10)
+    sparkConf.getInt("spark.core.clean.stage.info", 20)
   }
 
   private [core] def getMaxStageInfo(sparkConf: SparkConf): Int = {

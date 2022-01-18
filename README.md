@@ -296,8 +296,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Stage Completion Time": 858 ms,
    "Average Task Completion Time": 139 ms
    "Number of Task Failed in this Stage": 0
-   "Stage Skew info": Skew task in not present in this stage
-   "Failed task info in Stage": Failed task in not present in this stage
+   "Few Skew task info in Stage": Skew task in not present in this stage
+   "Few Failed task info in Stage": Failed task in not present in this stage
    }
    ***** Stage Info Metrics Stage Id:1 *****
    {
@@ -308,8 +308,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Stage Completion Time": 53 ms,
    "Average Task Completion Time": 9 ms
    "Number of Task Failed in this Stage": 0
-   "Stage Skew info": Skew task in not present in this stage
-   "Failed task info in Stage": Failed task in not present in this stage
+   "Few Skew task info in Stage": Skew task in not present in this stage
+   "Few Failed task info in Stage": Failed task in not present in this stage
    }
    ***** Stage Info Metrics Stage Id:2 *****
    {
@@ -320,7 +320,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Stage Completion Time": 11206 ms,
    "Average Task Completion Time": 221 ms
    "Number of Task Failed in this Stage": 0
-   "Stage Skew info": List({
+   "Few Skew task info in Stage": List({
    "Task Id": 0,
    "Executor Id": 3,
    "Number of records read": 11887,
@@ -341,7 +341,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Final Status of task": SUCCESS
    "Failure Reason for task": NA
    })
-   "Failed task info in Stage": Failed task in not present in this stage
+   "Few Failed task info in Stage": Failed task in not present in this stage
    }
    ***** Stage Info Metrics Stage Id:3 *****
    {
@@ -352,8 +352,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Stage Completion Time": 53 ms,
    "Average Task Completion Time": 9 ms
    "Number of Task Failed in this Stage": 1
-   "Stage Skew info": Skew task in not present in this stage
-   "Failed task info in Stage": List({
+   "Few Skew task info in Stage": Skew task in not present in this stage
+   "Few Failed task info in Stage": List({
    "Task Id": 12,
    "Executor Id": 1,
    "Number of records read in task": 0,
