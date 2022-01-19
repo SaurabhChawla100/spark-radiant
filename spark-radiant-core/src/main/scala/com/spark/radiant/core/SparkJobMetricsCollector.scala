@@ -18,6 +18,7 @@
 package com.spark.radiant.core
 
 import com.spark.radiant.core.config.CoreConf
+import com.spark.radiant.core.sparkCoreInfo.{JobInfo, StageInfo, TaskInfo}
 import com.typesafe.scalalogging.LazyLogging
 
 import org.apache.spark.{SparkConf, SparkCoreUtils, TaskFailedReason}
@@ -34,8 +35,7 @@ import scala.collection.mutable.LinkedHashMap
  *  --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector
  */
 
-class SparkJobMetricsCollector()
-  extends SparkListener with LazyLogging {
+class SparkJobMetricsCollector extends SparkListener with LazyLogging {
 
   private val jobInfoMap: HashMap[Long, JobInfo] = HashMap.empty
   private val stageInfoMap: LinkedHashMap[Long, StageInfo] = LinkedHashMap.empty
@@ -103,7 +103,7 @@ class SparkJobMetricsCollector()
       Math.floor(taskInfo.map(_._1).sum / taskInfo.size)
     val meanTaskCompletionTime = Math.floor(taskInfo.map(_._2).sum / taskInfo.size)
     val (taskInfoSuccess, failedTaskInfo) = taskInfoValue.partition {
-      taskInfo => taskInfo.taskStatus.equalsIgnoreCase("SUCCESS")
+      taskInfo => taskInfo.failedTaskEndReason.equalsIgnoreCase("NA")
     }
     val skewTaskInfo = taskInfoSuccess.filter {
       taskInfo =>
@@ -151,18 +151,23 @@ class SparkJobMetricsCollector()
       case reason: TaskFailedReason => reason.toErrorString
       case _ => "NA"
     }
-    val taskInputMetrics = taskEnd.taskMetrics.inputMetrics
-    val taskOutputMetrics = taskEnd.taskMetrics.outputMetrics
-    val taskShuffleReadRecords = taskEnd.taskMetrics.shuffleReadMetrics
-    val taskShuffleWriteRecords = taskEnd.taskMetrics.shuffleWriteMetrics
+    val info = if (taskEnd.taskMetrics != null) {
+      val taskInputMetrics = taskEnd.taskMetrics.inputMetrics
+      val taskOutputMetrics = taskEnd.taskMetrics.outputMetrics
+      val taskShuffleReadRecords = taskEnd.taskMetrics.shuffleReadMetrics
+      val taskShuffleWriteRecords = taskEnd.taskMetrics.shuffleWriteMetrics
+      // Create a taskInfo
+      TaskInfo(taskInfo.taskId,
+        taskInputMetrics.recordsRead + taskShuffleWriteRecords.recordsWritten,
+        taskShuffleWriteRecords.recordsWritten, taskInfo.executorId,
+        taskShuffleReadRecords.recordsRead, taskOutputMetrics.recordsWritten,
+        taskInfo.finishTime - taskInfo.launchTime, taskInfo.status, failedTaskEndReason)
+    } else {
+      TaskInfo(taskInfo.taskId, 0L, 0L,
+        taskInfo.executorId, 0L, 0L,
+        taskInfo.finishTime - taskInfo.launchTime, taskInfo.status, failedTaskEndReason)
+    }
     var taskInfoSeq = taskInfoMap.getOrElseUpdate(stageId, Seq.empty)
-    // Create a taskInfo
-    val info = TaskInfo(taskInfo.taskId,
-      taskInputMetrics.recordsRead + taskShuffleWriteRecords.recordsWritten,
-      taskShuffleWriteRecords.recordsWritten, taskInfo.executorId,
-      taskShuffleReadRecords.recordsRead, taskOutputMetrics.recordsWritten,
-      taskInfo.finishTime - taskInfo.launchTime, taskInfo.status, failedTaskEndReason)
-
     if (taskInfoSeq.nonEmpty) {
       taskInfoSeq = taskInfoSeq :+ info
     } else {
@@ -253,71 +258,5 @@ class SparkJobMetricsCollector()
       println(stageInfoValue)
     }
     println()
-  }
-}
-
-case class JobInfo(jobId: Long = -1L, var jobStart: Long = 0L, var jobEnd: Long = 0L)
-
-case class StageInfo (
-   stageId: Long = -1L,
-   var totalTask: Long = 0L,
-   var stageStart: Long = 0L,
-   var stageStatus: String = "",
-   var stageEndTime: Long = 0L,
-   var meanTaskCompletionTime: Long = 0L,
-   var numberOfExecutor: Long = 0L,
-   var failedTaskCount: Long = 0L,
-   var skewTaskInfo: Option[Seq[TaskInfo]] = None,
-   var failedTaskInfo: Option[Seq[TaskInfo]] = None) {
-
-  override def toString(): String = {
-    val stageCompletionTime = stageEndTime - stageStart
-    val skewTaskInfoValue = if (skewTaskInfo.isDefined) {
-      skewTaskInfo.get.toString()
-    } else {
-      "Skew task in not present in this stage"
-    }
-    val failedTaskInfoValue = if (failedTaskInfo.isDefined) {
-      failedTaskInfo.get.toString()
-    } else {
-      "Failed task in not present in this stage"
-    }
-    s"""{
-       | "Stage Id": ${stageId},
-       | "Final Stage Status": ${stageStatus},
-       | "Number of Task": ${totalTask},
-       | "Total Executors ran to complete all Task": ${numberOfExecutor},
-       | "Stage Completion Time": ${stageCompletionTime} ms,
-       | "Average Task Completion Time": ${meanTaskCompletionTime} ms
-       | "Number of Task Failed in this Stage": ${failedTaskCount}
-       | "Few Skew task info in Stage": ${skewTaskInfoValue}
-       | "Few Failed task info in Stage": ${failedTaskInfoValue}
-    }""".stripMargin
-  }
-}
-
-case class TaskInfo (
-   taskId: Long = -1L,
-   recordsRead: Long = -1L,
-   shuffleWriteRecord: Long = -1L,
-   executorId: String = "0",
-   shuffleReadRecord: Long = -1L,
-   recordsWrite: Long = -1L,
-   taskCompletionTime: Long = 0L,
-   taskStatus: String,
-   failedTaskEndReason: String) {
-
-  override def toString(): String = {
-    s"""{
-       | "Task Id": ${taskId},
-       | "Executor Id": ${executorId},
-       | "Number of records read in task": ${recordsRead},
-       | "Number of shuffle read Record in task": ${shuffleReadRecord},
-       | "Number of records write in task": ${recordsWrite},
-       | "Number of shuffle write Record in task": ${shuffleWriteRecord},
-       | "Task Completion Time": ${taskCompletionTime} ms,
-       | "Final Status of task": ${taskStatus},
-       | "Failure Reason for task": ${failedTaskEndReason}
-    }""".stripMargin
   }
 }
