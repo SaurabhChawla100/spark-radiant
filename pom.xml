@@ -7,7 +7,7 @@
     <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.3-SNAPSHOT</version>
+    <version>1.0.3</version>
     <modules>
         <module>spark-radiant-core</module>
         <module>spark-radiant-sql</module>

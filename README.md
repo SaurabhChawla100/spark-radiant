@@ -62,29 +62,29 @@ For Sql Optimization(Ready for use)
 <dependency>
     <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant-sql</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
-For Core Optimization (WIP)
+For Core Optimization (Ready for use)
 ```
 
 <dependency>
     <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant-core</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 
 ```
 
 ### running Spark job
 
-Publish the spark-radiant-sql-1.0.2.jar, spark-radiant-core-1.0.2.jar to maven central
+Publish the spark-radiant-sql-1.0.3.jar, spark-radiant-core-1.0.3.jar to maven central
 ```
-./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3,io.github.saurabhchawla100:spark-radiant-core:1.0.3"
 
 ./bin/spark-submit 
- --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2,io.github.saurabhchawla100:spark-radiant-core:1.0.2"
+ --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3,io.github.saurabhchawla100:spark-radiant-core:1.0.3"
  --class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar 
  ```
 
@@ -197,7 +197,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
       ``` 
         In PySpark
    
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.3
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -228,7 +228,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
       ``` 
          In PySpark
    
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.3
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -256,7 +256,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ``` 
          In PySpark
-              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.2
+              ./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-sql:1.0.3
       
                // Importing the extra Optimizations rule
                from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -276,7 +276,10 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    a) **Metrics Collector** - SparkJobMetricsCollector is used for collecting the important metrics to Spark Driver Memory,
         Stage metrics, Task Metrics. This is enabled by using the configuration
         --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector and providing the jars in the class path 
-        using --jars spark-radiant-core-1.0.3-SNAPSHOT.jar
+        using
+   ``` 
+    ./bin/spark-shell --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3,io.github.saurabhchawla100:spark-radiant-core:1.0.3"
+   ```
       
    ```
    Spark-Radiant Metrics Collector
