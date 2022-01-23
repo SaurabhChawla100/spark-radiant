@@ -70,17 +70,17 @@ Importing the rule for SizeBasedJoinReOrdering on the catalyst optimizer of the 
    The default value is false.
 
 ## Running SizeBasedJoinReOrdering in Spark
-Provide the jar spark-radiant-sql-1.0.2.1.jar in the class path for the spark Application. For eg using --jars etc.
+Provide the jar spark-radiant-sql-1.0.3.jar in the class path for the spark Application. For eg using --jars etc.
 
 or
 
-using --packages -> for jars(spark-radiant-sql-1.0.2.1.jar) published to maven central
+using --packages -> for jars(spark-radiant-sql-1.0.3.jar) published to maven central
 
 ```
-./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2.1"
+./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3"
 
 ./bin/spark-submit
---packages "io.github.saurabhchawla100:spark-radiant-1.0.2.1"
+--packages "io.github.saurabhchawla100:spark-radiant-1.0.3"
 --class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
 
 ```
@@ -97,7 +97,7 @@ sparkRadiantSqlApi.addOptimizerRule(spark)
 
 ### 2) Importing the rule for SizeBasedJoinReOrdering on the catalyst optimizer of the Apache Spark in pyspark
 ```
-./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.2.1
+./bin/pyspark --packages io.github.saurabhchawla100:spark-radiant-1.0.3
 
 // Importing the extra Optimizations rule
 >>> from sparkradiantsqlpy import SparkRadiantSqlApi
@@ -110,11 +110,11 @@ or
 
 ### 3) Importing the rule for SizeBasedJoinReOrdering on the catalyst optimizer of the Apache Spark
 ```
-./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.2.1"
+./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3"
 --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
 
 ./bin/spark-submit
---packages "io.github.saurabhchawla100:spark-radiant-1.0.2.1"
+--packages "io.github.saurabhchawla100:spark-radiant-1.0.3"
 --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
 --class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
 
