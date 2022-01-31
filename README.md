@@ -381,3 +381,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 ### Bug reports / New Feature Request
 
 You can raise new feature request and Bug on this [issuelink](https://github.com/SaurabhChawla100/spark-radiant/issues).
+
+### Release Notes
+  
+  a) spark-radiant 1.0.3 - Please refer the docs for spark radiant [1.0.3](docs/releaseNotes/spark-radiant-1.0.3.md).
