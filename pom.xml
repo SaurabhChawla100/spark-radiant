@@ -22,7 +22,7 @@
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <maven.plugin.scalastyle.version>1.0.0</maven.plugin.scalastyle.version>
-        <spark.version>3.1.1</spark.version>
+        <spark.version>3.2.1</spark.version>
         <scalatest-maven-plugin.version>2.0.0</scalatest-maven-plugin.version>
         <hadoop.version>3.1.4</hadoop.version>
         <test.java.home>${java.home}</test.java.home>
@@ -152,6 +152,17 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <profiles>
+        <profile>
+            <id>spark31</id>
+            <properties>
+                <spark.version>3.1.2</spark.version>
+                <scala.version>2.12.10</scala.version>
+                <scala.binary.version>2.12</scala.binary.version>
+            </properties>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>

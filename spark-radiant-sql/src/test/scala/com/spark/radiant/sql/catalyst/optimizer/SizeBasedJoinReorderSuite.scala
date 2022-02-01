@@ -206,7 +206,7 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
   }
 
   test("test the Join reorder is applied when project is present for dataSourceV2") {
-    spark.sql("set spark.sql.autoBroadcastJoinThreshold=700")
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=750")
     spark.sql("set spark.sql.support.sizebased.join.reorder=true")
     spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
 

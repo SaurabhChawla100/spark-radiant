@@ -47,6 +47,10 @@ cd spark-radiant
 
 mvn clean install -DskipTests / mvn clean package -DskipTests 
 
+For Spark-3.1.2 profile use the below command
+
+mvn clean install -DskipTests -Pspark31 / mvn clean package -DskipTests -Pspark31
+
 **Add the Dependency to your project**
 
 Build the project locally and add the dependency to your project
