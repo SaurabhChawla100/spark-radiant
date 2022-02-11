@@ -67,7 +67,9 @@ Importing the rule for SizeBasedJoinReOrdering on the catalyst optimizer of the 
 ## Config Tuning for SizeBasedJoinReOrdering in Spark
 
 1) **spark.sql.support.sizebased.join.reorder** - Config to add the support of SizeBasedJoinReOrdering for the sql queries.
-   The default value is false.
+   The default value is true.
+2) **spark.sql.support.sbo.smj** - Config to add the support of SizeBasedJoinReOrdering for the sql queries 
+    when all the join is not BHJ, only SMJ.The default value is false.This will work with spark-radiant-1.0.4.
 
 ## Running SizeBasedJoinReOrdering in Spark
 Provide the jar spark-radiant-sql-1.0.3.jar in the class path for the spark Application. For eg using --jars etc.
@@ -121,5 +123,4 @@ or
 ```
 
 Note - Will add few more optimization in near future.
-1) ReOrder the multiple SMJ based on size. Smaller table join executes first compared to bigger table in SMJ.
-2) ReOrder the Join by having the join condition with Partition column first compared to Non Partition column condition
+1) ReOrder the Join by having the join condition with Partition column first compared to Non Partition column condition

@@ -234,6 +234,27 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
     }
     assert(joinStrList.head == "org.apache.spark.sql.execution.joins.SortMergeJoinExec")
     assert(joinStrList.last == "org.apache.spark.sql.execution.joins.BroadcastHashJoinExec")
-    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,parquet,csv,json,kafka,orc,parquet,text")
+  }
+
+  test("test the Join reorder is applied when both the join is smj") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.sql("set spark.sql.support.sbo.smj=true")
+    val df = spark.sql("select * from testDf1 a, testDf2 b ," +
+      "testDf3 c where a.test11=b.test21" +
+      " and b.test22 = 2 and a.test11 = c.test31 and c.test33=7")
+
+    df.queryExecution.sparkPlan match {
+      case smj: SortMergeJoinExec =>
+        import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
+        import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
+        // testdf3 join will be applied before the testdf2
+        // since the size of the testdf3 is less than testdf2
+        smj.right.collectLeaves().head.asInstanceOf[BatchScanExec].scan match {
+          case p: ParquetScan =>
+            val schemaValue = p.dataSchema.map(x => x.name)
+            assert(schemaValue.toString() === "List(test21, test22, test23)")
+        }
+    }
   }
 }

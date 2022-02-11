@@ -66,9 +66,10 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] with LazyLogging {
               .map(x => x.asInstanceOf[AttributeReference].exprId)
             // check if existing join strategy is not BHJ and the other join in
             // sql is BHJ.
-            if (rightPlan.stats.sizeInBytes <= bhjThreshold &&
-              leftPlan.right.stats.sizeInBytes > bhjThreshold &&
-              leftPlan.right.stats.sizeInBytes > join.right.stats.sizeInBytes) {
+            if (checkSboForValidBhj(leftPlan.right.stats.sizeInBytes,
+              rightPlan.stats.sizeInBytes, bhjThreshold) ||
+              checkSboForValidSmj(leftPlan.right.stats.sizeInBytes,
+              rightPlan.stats.sizeInBytes, bhjThreshold, spark)) {
               val leftOutAttr = leftPlan.left.output.map(
                 x => x.asInstanceOf[AttributeReference].exprId)
               val leftOutputAttr = leftJoinCondAttr.find {
@@ -99,14 +100,14 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] with LazyLogging {
 
   private def validRightSide(plan: LogicalPlan): Boolean = {
     plan match {
-      case Project(_, Filter(_, LocalRelation(_, _, _)))
-           | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
-           | Project(_, Filter(_, HiveTableRelation(_, _, _, _, _)))
-           | Project(_, Filter(_, DataSourceV2ScanRelation(_, _, _))) => true
-      case Filter(_, LocalRelation(_, _, _))
-           | Filter(_, LogicalRelation(_, _, _, _))
-           | Filter(_, HiveTableRelation(_, _, _, _, _))
-           | Filter(_, DataSourceV2ScanRelation(_, _, _)) => true
+      case Project(_, Filter(_, LocalRelation(_, _, _)
+           | LogicalRelation(_, _, _, _)
+           | HiveTableRelation(_, _, _, _, _)
+           | DataSourceV2ScanRelation(_, _, _))) => true
+      case Filter(_, LocalRelation(_, _, _)
+           | LogicalRelation(_, _, _, _)
+           | HiveTableRelation(_, _, _, _, _)
+           | DataSourceV2ScanRelation(_, _, _)) => true
       case LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
            | HiveTableRelation(_, _, _, _, _)
@@ -155,9 +156,32 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] with LazyLogging {
     }
   }
 
+
+  private def checkSboForValidBhj(LeftSize: BigInt, RightSize: BigInt, bhjThreshold: Long): Boolean = {
+    RightSize <= bhjThreshold &&
+      LeftSize > bhjThreshold &&
+      LeftSize > RightSize
+  }
+
+  private def checkSboForValidSmj(LeftSize: BigInt,
+     RightSize: BigInt,
+     bhjThreshold: Long,
+     spark: SparkSession): Boolean = {
+    applySizeBasedJoinReOrderSmj(spark) &&
+      RightSize > bhjThreshold &&
+      LeftSize > bhjThreshold && LeftSize > RightSize
+  }
+
   private def applySizeBasedJoinReOrder(spark: SparkSession): Boolean = {
     spark.conf.get("spark.sql.support.sizebased.join.reorder",
       spark.sparkContext.getConf.get("spark.sql.support.sizebased.join.reorder",
+        "true")).toBoolean
+  }
+
+  private def applySizeBasedJoinReOrderSmj(spark: SparkSession): Boolean = {
+    spark.conf.get("spark.sql.support.sbo.smj",
+      spark.sparkContext.getConf.get("spark.sql.support.sbo.smj",
         "false")).toBoolean
   }
+
 }
