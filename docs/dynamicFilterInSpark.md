@@ -117,7 +117,7 @@ using --packages -> for jars(spark-radiant-sql-1.0.3.jar, spark-radiant-core-1.0
 
 ./bin/spark-submit
 --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3,io.github.saurabhchawla100:spark-radiant-core:1.0.3"
---class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
+--class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.2.1.jar
 
 ```
 
@@ -170,7 +170,7 @@ or
 
 ./bin/spark-submit
 --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3,io.github.saurabhchawla100:spark-radiant-core:1.0.3"
---class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.1.1.jar
+--class com.test.spark.examples.SparkTestDF /spark/examples/target/scala-2.12/jars/spark-test_2.12-3.2.1.jar
 --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
 
 ```
