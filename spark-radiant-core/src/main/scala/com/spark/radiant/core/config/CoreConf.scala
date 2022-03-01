@@ -66,4 +66,9 @@ object CoreConf {
     sparkConf.getBoolean("spark.core.display.all.task.info", false)
   }
 
+  private [core] def getMeanTaskCompletionFactor(sparkConf: SparkConf): Int = {
+    // default value is 2
+    sparkConf.getInt("spark.core.mean.task.completion.factor", 2)
+  }
+
 }

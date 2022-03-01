@@ -28,6 +28,7 @@ case class StageInfo (
    var meanTaskCompletionTime: Long = 0L,
    var numberOfExecutor: Long = 0L,
    var failedTaskCount: Long = 0L,
+   var recommendedCompute: Option[String] = None,
    var skewTaskInfo: Option[Seq[TaskInfo]] = None,
    var failedTaskInfo: Option[Seq[TaskInfo]] = None) {
 
@@ -49,9 +50,10 @@ case class StageInfo (
        | "Number of Task": $totalTask,
        | "Total Executors ran to complete all Task": $numberOfExecutor,
        | "Stage Completion Time": $stageCompletionTime ms,
-       | "Average Task Completion Time": $meanTaskCompletionTime ms
-       | "Number of Task Failed in this Stage": $failedTaskCount
-       | "Few Skew task info in Stage": $skewTaskInfoValue
+       | "Stage Completion Time Recommendation": ${recommendedCompute.get},
+       | "Average Task Completion Time": $meanTaskCompletionTime ms,
+       | "Number of Task Failed in this Stage": $failedTaskCount,
+       | "Few Skew task info in Stage": $skewTaskInfoValue,
        | "Few Failed task info in Stage": $failedTaskInfoValue
     }""".stripMargin
   }

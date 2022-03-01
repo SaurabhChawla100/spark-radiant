@@ -94,7 +94,8 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
     val executorGroupByTask =
       taskInfoValue.groupBy(_.executorId).mapValues { x =>
         (x.map(_.recordsRead).sum, x.map(_.shuffleWriteRecord).sum,
-          x.map(_.shuffleReadRecord).sum, x.map(_.recordsWrite).sum)
+          x.map(_.shuffleReadRecord).sum, x.map(_.recordsWrite).sum,
+          x.map(_ => 1).sum, x.head.executorId)
       }
     val meanTaskProcessByExec =
       Math.floor(executorGroupByTask.values.map(_._1).sum / executorGroupByTask.size)
@@ -140,6 +141,41 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
     }
     stageInfoValue.stageStatus = stageStatus
     stageInfoValue.numberOfExecutor = executorGroupByTask.size
+
+    val recommendedCompute = taskInfoSuccess.partition {  taskInfo =>
+      (taskInfo.taskCompletionTime/meanTaskCompletionTime) <=
+        CoreConf.getPercentMeanTimeRecordProcessed(sparkConf)
+    }
+    val stageCompletionTime = stageInfoValue.stageEndTime - stageInfoValue.stageStart
+    val twiceCompute = if (stageInfo.numTasks > executorGroupByTask.size) {
+      val compute = ((recommendedCompute._1.size * meanTaskCompletionTime) / (executorGroupByTask.size * 2))
+      + ((recommendedCompute._2.size * meanTaskCompletionTime * 2) / (executorGroupByTask.size * 2))
+      if (compute > 0 && compute < stageCompletionTime) {
+        compute.toInt
+      } else {
+        stageCompletionTime
+      }
+    } else {
+      stageCompletionTime
+    }
+
+    val fourTimesCompute = if (stageInfo.numTasks > executorGroupByTask.size*2) {
+      val compute = ((recommendedCompute._1.size * meanTaskCompletionTime) / (executorGroupByTask.size * 4))
+      + ((recommendedCompute._2.size * meanTaskCompletionTime * 4) / (executorGroupByTask.size * 4))
+      if (compute > 0 && compute < twiceCompute) {
+        compute.toInt
+      } else {
+        twiceCompute
+      }
+    } else {
+      twiceCompute
+    }
+
+    stageInfoValue.recommendedCompute =
+      Some(s"With 2x executors(${executorGroupByTask.size*2})," +
+        s" time to complete stage $twiceCompute ms." +
+        s" \n  With 4x executors(${executorGroupByTask.size*4})," +
+        s" time to complete stage $fourTimesCompute ms.")
     stageInfoMap.put(stageInfo.stageId, stageInfoValue)
     taskInfoMap.drop(stageInfo.stageId)
   }

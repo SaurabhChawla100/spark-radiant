@@ -303,6 +303,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Number of Task": 10,
    "Total Executors ran to complete all Task": 2,
    "Stage Completion Time": 858 ms,
+   "Stage Completion Time Recommendation": With 2x executors(4), time to complete stage 366 ms. 
+    With 4x executors(8), time to complete stage 183 ms.,
    "Average Task Completion Time": 139 ms
    "Number of Task Failed in this Stage": 0
    "Few Skew task info in Stage": Skew task in not present in this stage
@@ -315,6 +317,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Number of Task": 10,
    "Total Executors ran to complete all Task": 2,
    "Stage Completion Time": 53 ms,
+   "Stage Completion Time Recommendation": With 2x executors(4), time to complete stage 23 ms. 
+    With 4x executors(8), time to complete stage 12 ms.,
    "Average Task Completion Time": 9 ms
    "Number of Task Failed in this Stage": 0
    "Few Skew task info in Stage": Skew task in not present in this stage
@@ -327,6 +331,8 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    "Number of Task": 100,
    "Total Executors ran to complete all Task": 4,
    "Stage Completion Time": 11206 ms,
+   "Stage Completion Time Recommendation": With 2x executors(8), time to complete stage 10656 ms. 
+    With 4x executors(16), time to complete stage 10656 ms.,
    "Average Task Completion Time": 221 ms
    "Number of Task Failed in this Stage": 0
    "Few Skew task info in Stage": List({
