@@ -146,10 +146,21 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
       (taskInfo.taskCompletionTime/meanTaskCompletionTime) <=
         CoreConf.getPercentMeanTimeRecordProcessed(sparkConf)
     }
+
     val stageCompletionTime = stageInfoValue.stageEndTime - stageInfoValue.stageStart
     val twiceCompute = if (stageInfo.numTasks > executorGroupByTask.size) {
-      val compute = ((recommendedCompute._1.size * meanTaskCompletionTime) / (executorGroupByTask.size * 2))
-      + ((recommendedCompute._2.size * meanTaskCompletionTime * 2) / (executorGroupByTask.size * 2))
+      val recommendedComputeFactor = if (recommendedCompute._2.size > executorGroupByTask.size*2) {
+        executorGroupByTask.size*2
+      } else if (recommendedCompute._2.size > executorGroupByTask.size) {
+        executorGroupByTask.size
+      } else if (recommendedCompute._2.isEmpty) {
+        1
+      } else {
+        recommendedCompute._2.size
+      }
+      val compute = (((recommendedCompute._1.size * meanTaskCompletionTime)
+        / (executorGroupByTask.size * 2)) + recommendedCompute._2.map(taskInfo =>
+        taskInfo.taskCompletionTime).sum / recommendedComputeFactor)
       if (compute > 0 && compute < stageCompletionTime) {
         compute.toInt
       } else {
@@ -160,8 +171,18 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
     }
 
     val fourTimesCompute = if (stageInfo.numTasks > executorGroupByTask.size*2) {
-      val compute = ((recommendedCompute._1.size * meanTaskCompletionTime) / (executorGroupByTask.size * 4))
-      + ((recommendedCompute._2.size * meanTaskCompletionTime * 4) / (executorGroupByTask.size * 4))
+      val recommendedComputeFactor = if (recommendedCompute._2.size > executorGroupByTask.size*4) {
+        executorGroupByTask.size*4
+      } else if (recommendedCompute._2.size > executorGroupByTask.size*2) {
+        executorGroupByTask.size*2
+      } else if (recommendedCompute._2.isEmpty) {
+        1
+      } else {
+        recommendedCompute._2.size
+      }
+      val compute = (((recommendedCompute._1.size * meanTaskCompletionTime)
+        / (executorGroupByTask.size * 4)) + recommendedCompute._2.map(taskInfo =>
+        taskInfo.taskCompletionTime).sum / recommendedComputeFactor)
       if (compute > 0 && compute < twiceCompute) {
         compute.toInt
       } else {

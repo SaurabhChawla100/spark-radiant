@@ -28,7 +28,7 @@ case class StageInfo (
    var meanTaskCompletionTime: Long = 0L,
    var numberOfExecutor: Long = 0L,
    var failedTaskCount: Long = 0L,
-   var recommendedCompute: Option[String] = None,
+   var recommendedCompute: Option[String] = Some("No Benefit"),
    var skewTaskInfo: Option[Seq[TaskInfo]] = None,
    var failedTaskInfo: Option[Seq[TaskInfo]] = None) {
 
