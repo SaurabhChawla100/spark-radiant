@@ -82,9 +82,7 @@ class SizeBasedJoinReorderSuite extends AnyFunSuite
   }
 
   override protected def afterAll(): Unit = {
-    deleteDir("src/test/resources/SBJRO/TestJoinReorderParquet1")
-    deleteDir("src/test/resources/SBJRO/TestJoinReorderParquet2")
-    deleteDir("src/test/resources/SBJRO/TestJoinReorderParquet3")
+    deleteDir("src/test/resources/SBJRO")
     spark.stop()
   }
 

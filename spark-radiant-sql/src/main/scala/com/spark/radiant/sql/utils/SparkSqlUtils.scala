@@ -84,7 +84,12 @@ private[sql] class SparkSqlUtils extends Serializable {
     Executors.newSingleThreadExecutor(threadFactory)
   }
 
-  def saveBloomFilter(filter: BloomFilter, path: String, fs: FileSystem): Unit = {
+  def saveBloomFilter(
+     filter: BloomFilter,
+     path: String): Unit = {
+    val inputPath = new Path(path)
+    val hadoopConf = getHadoopConf()
+    val fs = inputPath.getFileSystem(hadoopConf)
     val fileOutputStream: FSDataOutputStream = fs.create(new Path(path))
     val out = new ByteArrayOutputStream()
     try {
@@ -103,14 +108,7 @@ private[sql] class SparkSqlUtils extends Serializable {
     val deserialized = {
       var fileInputStream: FSDataInputStream = null
       try {
-        // scalastyle:off
-        val sparkHadoopUtilClass = Class.forName(
-          "org.apache.spark.deploy.SparkHadoopUtil")
-        val sparkHadoopUtil = sparkHadoopUtilClass.newInstance()
-        val newConfigurationMethod = sparkHadoopUtilClass.getMethod(
-          "newConfiguration", classOf[SparkConf])
-        val hadoopConf = newConfigurationMethod.invoke(
-          sparkHadoopUtil, SparkEnv.get.conf).asInstanceOf[Configuration]
+        val hadoopConf = getHadoopConf()
         val fs = new Path(path).getFileSystem(hadoopConf)
         fileInputStream = fs.open(new Path(path))
         BloomFilter.readFrom(fileInputStream)
@@ -121,13 +119,14 @@ private[sql] class SparkSqlUtils extends Serializable {
     deserialized
   }
 
-  def mergeSaveBloomFilter(inputBloomFilter1: BloomFilter,
+  def mergeSaveBloomFilter(
+     inputBloomFilter1: BloomFilter,
      inputBloomFilter2: BloomFilter,
      path: String,
      fs: FileSystem): Unit = {
     try {
       val mergedBloomFilter = inputBloomFilter1.mergeInPlace(inputBloomFilter2)
-      saveBloomFilter(mergedBloomFilter, path, fs)
+      saveBloomFilter(mergedBloomFilter, path)
     } catch {
       case ex: Exception =>
         throw ex
@@ -198,5 +197,16 @@ private[sql] class SparkSqlUtils extends Serializable {
       }
     )
     bloomFilter
+  }
+
+  def getHadoopConf(): Configuration = {
+    // scalastyle:off
+    val sparkHadoopUtilClass = Class.forName(
+      "org.apache.spark.deploy.SparkHadoopUtil")
+    val sparkHadoopUtil = sparkHadoopUtilClass.newInstance()
+    val newConfigurationMethod = sparkHadoopUtilClass.getMethod(
+      "newConfiguration", classOf[SparkConf])
+    newConfigurationMethod.invoke(
+      sparkHadoopUtil, SparkEnv.get.conf).asInstanceOf[Configuration]
   }
 }
