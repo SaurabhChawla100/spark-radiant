@@ -17,10 +17,55 @@
 
 package com.spark.radiant.sql.index
 
+import com.spark.radiant.sql.utils.SparkSqlUtils
+import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.catalyst.plans.logical.Filter
+import org.apache.spark.sql.execution.datasources.LogicalRelation
+
 /**
  *  add Bloom Filter Index on tables accessed by Spark
  */
 
 class BloomFilterIndexImpl {
   // TODO work on this feature
+
+  /**
+   * Apply the BloomFilterIndex to dataFrame
+   * @param spark
+   * @param dataFrame
+   * @param path
+   * @param attrName
+   * @return
+   */
+  def applyBloomFilterToDF(spark: SparkSession,
+     dataFrame: DataFrame,
+     path: String, attrName: String): DataFrame = {
+    // TODO - This is the initial code, needs to be improved
+    //  and also support is needed for different rel
+    val sqlUtils = new SparkSqlUtils()
+    val plan = dataFrame.queryExecution.optimizedPlan
+    var hold = false
+    val utils = new SparkSqlUtils()
+    val bf = utils.readBloomFilter(path)
+    val broadcastValue = spark.sparkContext.broadcast(bf)
+    val updatedPlan = plan.transform {
+      case filter@Filter(_, rel: LogicalRelation) if
+        !hold & rel.relation.schema.names.contains(attrName) =>
+        hold = true
+        val newChildDF = sqlUtils.createDfFromLogicalPlan(spark, filter)
+        newChildDF.filter { x =>
+          broadcastValue.value.mightContain(x.getAs(attrName))
+        }.queryExecution.optimizedPlan
+      case rel: LogicalRelation if
+        !hold & rel.relation.schema.names.contains(attrName) =>
+        hold = true
+        val newChildDF = sqlUtils.createDfFromLogicalPlan(spark, rel)
+        newChildDF.filter { x =>
+          broadcastValue.value.mightContain(x.getAs(attrName))
+        }.queryExecution.optimizedPlan
+    }
+    broadcastValue.unpersist()
+    sqlUtils.createDfFromLogicalPlan(spark, updatedPlan)
+  }
+
 }

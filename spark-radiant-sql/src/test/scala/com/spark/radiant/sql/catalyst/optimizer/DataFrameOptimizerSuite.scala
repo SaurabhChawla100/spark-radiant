@@ -25,7 +25,6 @@ import org.scalatest.matchers.must.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
-import com.spark.radiant.sql.utils.SparkSqlUtils
 
 import java.io.File
 import scala.reflect.io.Directory
@@ -159,20 +158,16 @@ class DataFrameOptimizerSuite extends AnyFunSuite
   test("create bloomFilter,save and read") {
     val df = spark.createDataFrame(Seq(("d1", StructDropDup(1, 2)),
       ("d2", StructDropDup(1, 2)))).toDF("a", "b")
-    val sparkSqlUtils = new SparkSqlUtils()
+    val sparkRadiantSqlApi = new SparkRadiantSqlApi()
     // create bloomFilter
     val bf = df.stat.bloomFilter("a", 1000, 0.2)
     val path = "src/test/resources/BloomFilter"
     // save the bloomFilter to the persistent store
-    sparkSqlUtils.saveBloomFilter(bf, s"$path/TestBloomFilter")
-    // read the bloomFilter from the persistent store
-    val bf2 = sparkSqlUtils.readBloomFilter(s"$path/TestBloomFilter")
-    val broadcastValue = spark.sparkContext.broadcast(bf2)
-    // use bloomFilter in the filter condition
-    val df1 = df.filter("a='d2'").filter { x =>
-      broadcastValue.value.mightContain(x.getAs("a"))
-    }
-    assert(df1.collect===Array(Row("d2", Row(1, 2))))
+    sparkRadiantSqlApi.saveBloomFilter(bf, s"$path/TestBloomFilter")
+    // read the bloomFilter from the persistent store and apply the condition
+    val df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
+      df.filter("a='d2'"),
+      s"$path/TestBloomFilter", "a")
     deleteDir(path)
   }
 }

@@ -18,6 +18,7 @@
 package com.spark.radiant.sql.api
 
 import com.spark.radiant.sql.catalyst.optimizer.SparkSqlDFOptimizerRule
+import com.spark.radiant.sql.index.BloomFilterIndexImpl
 import com.spark.radiant.sql.utils.SparkSqlUtils
 import com.typesafe.scalalogging.LazyLogging
 
@@ -27,6 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.sparkRadiantUtil.SparkSqlUtil
+import org.apache.spark.util.sketch.BloomFilter
 
 import scala.collection.mutable
 import scala.collection.mutable.Map
@@ -188,6 +190,42 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
   def addOptimizerRuleInSqlExt(spark: SparkSession): Unit = {
     // Importing the extra Optimizations rule in extendedOperatorOptimizationRules
     SparkSqlUtil.injectRule(spark, seqRule)
+  }
+
+  /**
+   * create Persistent Bloom Filter
+   * @param filter
+   * @param path
+   */
+  def saveBloomFilter(
+     filter: BloomFilter,
+     path: String): Unit = {
+    val util = new SparkSqlUtils()
+    util.saveBloomFilter(filter, path)
+  }
+  /**
+   * Read the Persistent Bloom Filter
+   * @param path
+   */
+  def readBloomFilter(path: String): BloomFilter = {
+    val util = new SparkSqlUtils()
+    util.readBloomFilter(path)
+  }
+
+  /**
+   * Api for having persistent BloomFilter on DataFrame
+   * @param spark
+   * @param dataFrame
+   * @param path
+   * @param attrName
+   * @return
+   */
+  def applyBloomFilterToDF(spark: SparkSession,
+     dataFrame: DataFrame,
+     path: String,
+     attrName: String): DataFrame = {
+   val index = new BloomFilterIndexImpl()
+   index.applyBloomFilterToDF(spark, dataFrame, path, attrName)
   }
 }
 
