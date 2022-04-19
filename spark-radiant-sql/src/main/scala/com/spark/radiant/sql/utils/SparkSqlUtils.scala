@@ -41,7 +41,7 @@ import scala.reflect.runtime.{universe => ru}
  *
  */
 
-private[sql] class SparkSqlUtils extends Serializable {
+class SparkSqlUtils extends Serializable {
 
   def getSplittedByAndPredicates(condition: Expression): Seq[Expression] = {
     condition match {

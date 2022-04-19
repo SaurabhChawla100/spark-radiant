@@ -18,7 +18,10 @@
 package com.spark.radiant.sql.index
 
 import com.spark.radiant.sql.utils.SparkSqlUtils
-import org.apache.spark.sql.{DataFrame, SparkSession}
+
+import org.apache.spark.sql
+import org.apache.spark.sql.catalyst.expressions.Literal
+import org.apache.spark.sql.{DataFrame, PersistBloomFilterExpr, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.Filter
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 
@@ -45,26 +48,24 @@ class BloomFilterIndexImpl {
     val sqlUtils = new SparkSqlUtils()
     val plan = dataFrame.queryExecution.optimizedPlan
     var hold = false
-    val utils = new SparkSqlUtils()
-    val bf = utils.readBloomFilter(path)
-    val broadcastValue = spark.sparkContext.broadcast(bf)
     val updatedPlan = plan.transform {
       case filter@Filter(_, rel: LogicalRelation) if
         !hold & rel.relation.schema.names.contains(attrName) =>
+        val attrExpr = dataFrame.select(attrName).queryExecution.optimizedPlan
+          .asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Project]
+          .projectList.head
         hold = true
-        val newChildDF = sqlUtils.createDfFromLogicalPlan(spark, filter)
-        newChildDF.filter { x =>
-          broadcastValue.value.mightContain(x.getAs(attrName))
-        }.queryExecution.optimizedPlan
+        val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
+        Filter(bloomFilterExpression, filter)
       case rel: LogicalRelation if
         !hold & rel.relation.schema.names.contains(attrName) =>
+        val attrExpr = dataFrame.select(attrName).queryExecution.optimizedPlan
+          .asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Project]
+          .projectList.head
         hold = true
-        val newChildDF = sqlUtils.createDfFromLogicalPlan(spark, rel)
-        newChildDF.filter { x =>
-          broadcastValue.value.mightContain(x.getAs(attrName))
-        }.queryExecution.optimizedPlan
+        val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
+        Filter(bloomFilterExpression, rel)
     }
-    broadcastValue.unpersist()
     sqlUtils.createDfFromLogicalPlan(spark, updatedPlan)
   }
 
