@@ -167,7 +167,7 @@ class DataFrameOptimizerSuite extends AnyFunSuite
     // read the bloomFilter from the persistent store and apply the condition
     val df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
       df.filter("a='d2'"),
-      s"$path/TestBloomFilter", "a")
+      s"$path/TestBloomFilter", List("a"))
     deleteDir(path)
   }
 }

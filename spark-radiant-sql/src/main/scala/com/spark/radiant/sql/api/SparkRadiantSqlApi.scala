@@ -223,7 +223,7 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
   def applyBloomFilterToDF(spark: SparkSession,
      dataFrame: DataFrame,
      path: String,
-     attrName: String): DataFrame = {
+     attrName: List[String]): DataFrame = {
    val index = new BloomFilterIndexImpl()
    index.applyBloomFilterToDF(spark, dataFrame, path, attrName)
   }

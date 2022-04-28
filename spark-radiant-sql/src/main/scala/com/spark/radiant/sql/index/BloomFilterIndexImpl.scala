@@ -18,19 +18,22 @@
 package com.spark.radiant.sql.index
 
 import com.spark.radiant.sql.utils.SparkSqlUtils
+import com.typesafe.scalalogging.LazyLogging
 
-import org.apache.spark.sql
+import org.apache.spark.sql.sparkRadiantUtil.SparkSqlUtil
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.{DataFrame, PersistBloomFilterExpr, SparkSession}
-import org.apache.spark.sql.catalyst.plans.logical.Filter
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 
 /**
  *  add Bloom Filter Index on tables accessed by Spark
  */
 
-class BloomFilterIndexImpl {
+class BloomFilterIndexImpl extends LazyLogging {
   // TODO work on this feature
+  val aggBlmFilter = "aggBlmFilter"
+  val attrDelimiter = "~#~"
 
   /**
    * Apply the BloomFilterIndex to dataFrame
@@ -42,31 +45,56 @@ class BloomFilterIndexImpl {
    */
   def applyBloomFilterToDF(spark: SparkSession,
      dataFrame: DataFrame,
-     path: String, attrName: String): DataFrame = {
+     path: String, attrName: List[String]): DataFrame = {
     // TODO - This is the initial code, needs to be improved
     //  and also support is needed for different rel
     val sqlUtils = new SparkSqlUtils()
-    val plan = dataFrame.queryExecution.optimizedPlan
-    var hold = false
-    val updatedPlan = plan.transform {
-      case filter@Filter(_, rel: LogicalRelation) if
-        !hold & rel.relation.schema.names.contains(attrName) =>
-        val attrExpr = dataFrame.select(attrName).queryExecution.optimizedPlan
-          .asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Project]
-          .projectList.head
-        hold = true
-        val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
-        Filter(bloomFilterExpression, filter)
-      case rel: LogicalRelation if
-        !hold & rel.relation.schema.names.contains(attrName) =>
-        val attrExpr = dataFrame.select(attrName).queryExecution.optimizedPlan
-          .asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Project]
-          .projectList.head
-        hold = true
-        val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
-        Filter(bloomFilterExpression, rel)
-    }
+    val updatedPlan = applyBloomFilterToPlan(dataFrame.queryExecution.optimizedPlan,
+      path, attrName)
     sqlUtils.createDfFromLogicalPlan(spark, updatedPlan)
+  }
+
+  /**
+   *
+   * @param plan
+   * @param path
+   * @param attrName
+   * @return Logical Plan having bloomFilter
+   */
+  def applyBloomFilterToPlan(
+     plan: LogicalPlan,
+     path: String, attrName: List[String]): LogicalPlan = {
+
+    val oldAttr = plan.outputSet.toList
+      .map(_.asInstanceOf[org.apache.spark.sql.catalyst.expressions.NamedExpression])
+    var hold = false
+    if (oldAttr.map(_.name).count(attrName => attrName.contains(attrName)) == attrName.size) {
+      val newAttrList = oldAttr ++ List(SparkSqlUtil.aggregatedFilter(
+        attrName, oldAttr, attrDelimiter, aggBlmFilter))
+
+      val attrExpr = newAttrList.filter(c => c.name.equals(aggBlmFilter)).head
+
+      val newPlan = Project(newAttrList, plan)
+
+      val updatedPlan = newPlan.transform {
+        case filter@Filter(_, rel: LogicalRelation) if
+          !hold
+            & rel.relation.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+          hold = true
+          val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
+          Filter(bloomFilterExpression, filter)
+        case rel: LogicalRelation if
+          !hold &
+            rel.relation.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+          hold = true
+          val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
+          Filter(bloomFilterExpression, rel)
+      }
+      Project(oldAttr, updatedPlan)
+    } else {
+      logger.info("Bloom filter cannot be applied because of mismatch the aggregated bloomFilter attr")
+      plan
+    }
   }
 
 }

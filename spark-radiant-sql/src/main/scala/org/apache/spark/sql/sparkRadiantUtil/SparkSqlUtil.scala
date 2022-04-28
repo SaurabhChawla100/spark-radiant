@@ -18,8 +18,11 @@
 package org.apache.spark.sql.sparkRadiantUtil
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.expressions.{Alias, Cast,
+  ConcatWs, Literal, Md5, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.types.BinaryType
 
 /**
  * SparkSqlUtils utility class for calling the private package methods, variable
@@ -39,4 +42,22 @@ object SparkSqlUtil {
       sparkSession.extensions.injectOptimizerRule(_ => rule)
     }
   }
+
+  /**
+   * creating the aggregated filter column
+   * @param attrName
+   * @param attr
+   * @param attrDelimiter
+   * @param aggBlmFilter
+   */
+  def aggregatedFilter(attrName: List[String],
+     attr: List[NamedExpression],
+     attrDelimiter: String,
+     aggBlmFilter: String): NamedExpression = {
+    Alias(
+      Md5(Cast(child = ConcatWs(
+        List(Literal(attrDelimiter)) ++ attr.filter(attr => attrName.contains(attr.name))),
+        dataType = BinaryType)), aggBlmFilter)()
+  }
+
 }
