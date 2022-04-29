@@ -22,7 +22,7 @@ import com.typesafe.scalalogging.LazyLogging
 
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
-  ConcatWs, EqualTo, Expression, In, Literal, Or}
+  Cast, ConcatWs, EqualTo, Expression, In, Literal, Md5, Or}
 import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftAnti, LeftOuter,
   LeftSemi, RightOuter}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
@@ -34,7 +34,7 @@ import org.apache.spark.sql.execution.datasources.v2.orc.OrcScan
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
 import org.apache.spark.sql.sources.{Filter => V2Filter}
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{BinaryType, StringType}
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, SparkSession}
 import org.apache.spark.util.sketch.BloomFilter
 
@@ -63,16 +63,21 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
 
   /**
    *
-   * @param df - dateframe for which bloom filter is needed
+   * @param plan - LogicalPlan for which bloom filter is needed
    * @param columns - list of column that can be combined to create key
    * @param bloomFilterKeyApp - BloomFilter key name
    * @return
    */
-  private def createBloomFilterKeyColumn(df: DataFrame,
+  private def createBloomFilterKeyColumn(plan: LogicalPlan,
      columns: List[Expression],
-     bloomFilterKeyApp: String): DataFrame = {
-    df.withColumn(bloomFilterKeyApp, md5(combineExpression(dfKeySeparator,
-      columns.map(c => new org.apache.spark.sql.Column(c)): _*)))
+     bloomFilterKeyApp: String): LogicalPlan = {
+
+    val oldAttr = plan.outputSet.toList
+      .map(_.asInstanceOf[org.apache.spark.sql.catalyst.expressions.NamedExpression])
+    val newAttrList = oldAttr ++ List(Alias(
+      Md5(Cast(child = ConcatWs(List(Literal(dfKeySeparator)) ++ columns),
+        dataType = BinaryType)), bloomFilterKeyApp)())
+    Project(newAttrList, plan)
   }
 
   private def createDfFromLogicalPlan(spark: SparkSession,
@@ -87,7 +92,7 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
    *
    * @param spark - existing spark Session
    * @param bloomFilterAppendedKey - Column name for BloomFilter key in Dynamic Filter
-   * @param DataframeForGenDf - Data frame used for generating the values needed
+   * @param planForGenDf - plan for generating the values needed
    *                          for Dynamic filter
    * @param planForDf - Bigger table plan where the Dynamic Filter is added
    * @param outputForGenDF - Output of smaller table for generating the Dynamic Filter
@@ -97,7 +102,7 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
    */
   private def getPlanFromJoinCondition(spark: SparkSession,
      bloomFilterAppendedKey: String,
-     DataframeForGenDf: DataFrame,
+     planForGenDf: LogicalPlan,
      planForDf: LogicalPlan,
      outputForGenDF: Seq[Attribute],
      bloomFilterCount: Long,
@@ -140,8 +145,10 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
         "spark.sql.dynamicFilter.pushdown.threshold", 5000)
       // conf to push all the join key values to the datasource pushed down filter
       val useAllJoinKey = pushDownAllJoinKeyValues()(spark)
-      val dfr = createBloomFilterKeyColumn(DataframeForGenDf, filterToCreateDF.toList,
-        bloomFilterAppendedKey)
+      val dfr = createDfFromLogicalPlan(spark,
+        createBloomFilterKeyColumn(planForGenDf,
+          filterToCreateDF.toList,
+          bloomFilterAppendedKey))
       val rightFilterKeyValue = if (useAllJoinKey) {
         val filterToCreateDFKey = filterToCreateDF.map(
           x => x.asInstanceOf[AttributeReference].name) ++ List(bloomFilterAppendedKey)
@@ -194,10 +201,9 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
        broadcastValue.value),Project(leftPlanExpr, logicalRelation))
       dfl = createDfFromLogicalPlan(spark, newPlan) */
 
-      var dfl: DataFrame = createDfFromLogicalPlan(spark, planForDf)
-      dfl = createBloomFilterKeyColumn(dfl, filterNeededForDF.toList, bloomFilterAppendedKey)
+      var leftDynamicFilterPlan = createBloomFilterKeyColumn(planForDf,
+        filterNeededForDF.toList, bloomFilterAppendedKey)
       if (pushDownFileScanValues.nonEmpty) {
-        var leftDynamicFilterPlan = dfl.queryExecution.optimizedPlan
         var inExpr: Expression = In(filterNeededForDF.head, pushDownFileScanValues.head.toList)
         // push all the join key values to the datasource pushed down filter
         if (useAllJoinKey && filterNeededForDF.size == pushDownFileScanValues.size -1) {
@@ -209,12 +215,11 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
           }
         }
         leftDynamicFilterPlan = Filter(inExpr, leftDynamicFilterPlan)
-        dfl = createDfFromLogicalPlan(spark, leftDynamicFilterPlan)
       }
-      val dfl1 = dfl.filter { x =>
+      val dfl = createDfFromLogicalPlan(spark, leftDynamicFilterPlan).filter { x =>
         broadcastValue.value.mightContain(x.getAs(bloomFilterAppendedKey))
       }
-      dfl1.drop(dfl1(bloomFilterAppendedKey)).queryExecution.optimizedPlan
+      dfl.drop(dfl(bloomFilterAppendedKey)).queryExecution.optimizedPlan
     } else {
       planForDf
     }
@@ -254,7 +259,7 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
       }
     }
     val bloomFilterKeyAppender = s"${bloomFilterKey}${updatedJoinAttr.map(x => x._2).mkString("$$")}"
-    val dfr = createDfFromLogicalPlan(spark, predicatesPlanUsedInDF)
+    val rightSideDFPlan: LogicalPlan = predicatesPlanUsedInDF
     var hold = false
     val updatedDynamicFilteredPlan = planForDF.transform {
       case typeFilter: TypedFilter =>
@@ -274,27 +279,27 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
            | HiveTableRelation(_, _, _, _, _)
            | DataSourceV2ScanRelation(_, _, _)
            | InMemoryRelation(_, _, _)) if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       // For supporting the DataSourceV2 when this rule is added as the part
       // of spark.sql.extensions
       case filter@Filter(_, DataSourceV2Relation(_,_,_,_,_)) if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           localTableScan, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case logicalRelation: LogicalRelation if !hold =>
-       getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+       getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           logicalRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case hiveTableRelation: HiveTableRelation if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           hiveTableRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case dataSourceV2ScanRelation: DataSourceV2ScanRelation if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           dataSourceV2ScanRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case inMemoryRelation: InMemoryRelation if !hold =>
-        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, dfr,
+        getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           inMemoryRelation, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
     }
     logger.debug(s"optimized DynamicFilteredPlan:: ${updatedDynamicFilteredPlan}")
