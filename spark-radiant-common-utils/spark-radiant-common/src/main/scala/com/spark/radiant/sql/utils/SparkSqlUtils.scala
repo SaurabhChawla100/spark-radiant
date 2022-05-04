@@ -122,8 +122,7 @@ class SparkSqlUtils extends Serializable {
   def mergeSaveBloomFilter(
      inputBloomFilter1: BloomFilter,
      inputBloomFilter2: BloomFilter,
-     path: String,
-     fs: FileSystem): Unit = {
+     path: String): Unit = {
     try {
       val mergedBloomFilter = inputBloomFilter1.mergeInPlace(inputBloomFilter2)
       saveBloomFilter(mergedBloomFilter, path)

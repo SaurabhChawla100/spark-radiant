@@ -68,7 +68,7 @@ class BloomFilterIndexImpl extends LazyLogging {
     val oldAttr = plan.outputSet.toList
       .map(_.asInstanceOf[org.apache.spark.sql.catalyst.expressions.NamedExpression])
     var hold = false
-    if (oldAttr.map(_.name).count(attrName => attrName.contains(attrName)) == attrName.size) {
+    if (oldAttr.map(_.name).count(attr => attrName.contains(attr)) == attrName.size) {
       val newAttrList = oldAttr ++ List(SparkSqlUtil.aggregatedFilter(
         attrName, oldAttr, attrDelimiter, aggBlmFilter))
 

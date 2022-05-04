@@ -27,7 +27,7 @@ import org.apache.spark.sql.types.{BooleanType, DataType}
 import org.apache.spark.util.sketch.BloomFilter
 
 case class PersistBloomFilterExpr(left: Expression,
-    right: Expression) extends BinaryExpression with Predicate {
+   right: Expression) extends BinaryExpression with Predicate {
 
   override def prettyName: String = "persist_bloom_filter_expr"
 

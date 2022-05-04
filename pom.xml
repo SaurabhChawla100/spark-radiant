@@ -9,6 +9,8 @@
     <packaging>pom</packaging>
     <version>1.0.4-SNAPSHOT</version>
     <modules>
+        <module>spark-radiant-common-utils/spark-radiant-common</module>
+        <module>spark-radiant-common-utils/spark-radiant-common-${spark.package.version}</module>
         <module>spark-radiant-core</module>
         <module>spark-radiant-sql</module>
     </modules>
@@ -23,6 +25,7 @@
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <maven.plugin.scalastyle.version>1.0.0</maven.plugin.scalastyle.version>
         <spark.version>3.2.1</spark.version>
+        <spark.package.version>3.2</spark.package.version>
         <scalatest-maven-plugin.version>2.0.0</scalatest-maven-plugin.version>
         <hadoop.version>3.1.4</hadoop.version>
         <test.java.home>${java.home}</test.java.home>
@@ -158,6 +161,7 @@
             <id>spark31</id>
             <properties>
                 <spark.version>3.1.2</spark.version>
+                <spark.package.version>3.1</spark.package.version>
                 <scala.version>2.12.10</scala.version>
                 <scala.binary.version>2.12</scala.binary.version>
             </properties>
