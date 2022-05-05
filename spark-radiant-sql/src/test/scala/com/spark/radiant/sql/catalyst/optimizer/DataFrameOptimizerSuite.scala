@@ -20,11 +20,16 @@ package com.spark.radiant.sql.catalyst.optimizer
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.TypedFilter
+import org.apache.spark.sql.catalyst.plans.logical.Filter
+import org.apache.spark.sql.functions.{col, md5}
+import org.apache.spark.sql.PersistBloomFilterExpr
+
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
+import com.spark.radiant.sql.utils.SparkSqlUtils
 
 import java.io.File
 import scala.reflect.io.Directory
@@ -62,9 +67,13 @@ class DataFrameOptimizerSuite extends AnyFunSuite
    df = spark.createDataFrame(Seq((1, 1, 4), (1, 2, 5),
      (2, 1, 6), (2, 1, 7), (2, 3, 8), (3, 2, 9), (3, 3, 7))).toDF("test21", "test22", "test23")
    df.createOrReplaceTempView("testDf2")
+   spark.createDataFrame(Seq(("1", 1), ("5", 9))).toDF("test11", "test12").
+     repartition(1).write.mode("overwrite").
+     format("parquet").save("src/test/resources/PersistBloomFilter/Testparquet")
   }
 
   override protected def afterAll(): Unit = {
+    deleteDir("src/test/resources/PersistBloomFilter")
     spark.stop()
   }
 
@@ -170,6 +179,47 @@ class DataFrameOptimizerSuite extends AnyFunSuite
       s"$path/TestBloomFilter", List("a"))
     deleteDir(path)
   }
+
+  test("create persist bloomFilter,save and read for FileSourceScan") {
+    val df = spark.read.parquet("src/test/resources/PersistBloomFilter/Testparquet")
+    val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+    // create bloomFilter
+    val bf = df.withColumn("aggBlFilter",
+      md5(col("test11")))
+      .filter("test11='5'")
+      .stat.bloomFilter("aggBlFilter", 1000, 0.2)
+    val path = "src/test/resources/BloomFilter"
+    // save the bloomFilter to the persistent store
+    sparkRadiantSqlApi.saveBloomFilter(bf, s"$path/TestBloomFilter")
+    // read the bloomFilter from the persistent store and apply the condition
+    var df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
+      df,
+      s"$path/TestBloomFilter", List("test11"))
+    var filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    val utils = new SparkSqlUtils()
+    val expr = utils.getSplittedByAndPredicates(filter.get.expressions.head)
+    assert(expr.filter(_.isInstanceOf[PersistBloomFilterExpr]).size == 1)
+    filter.get.expressions.head.isInstanceOf[PersistBloomFilterExpr]
+    assert(df1.collect().length == 1)
+    // Aggregated keys not present in projection
+    df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
+      df.select("test11"),
+      s"$path/TestBloomFilter", List("test11", "test12"))
+    filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isEmpty, "Bloom filter is not applied" +
+      " since aggregate keys are not present in the projection")
+    // Aggregated keys in the persist bloomFilter is different than the
+    // keys provided in select query return empty result
+    df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
+      df,
+      s"$path/TestBloomFilter", List("test11", "test12"))
+    filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    assert(df1.collect().length == 0)
+    deleteDir(path)
+  }
+
 }
 
 case class StructDropDup(c1: Int, c2: Int)
