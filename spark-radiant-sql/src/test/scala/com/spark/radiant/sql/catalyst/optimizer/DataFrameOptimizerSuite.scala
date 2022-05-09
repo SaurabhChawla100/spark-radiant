@@ -183,14 +183,10 @@ class DataFrameOptimizerSuite extends AnyFunSuite
   test("create persist bloomFilter,save and read for FileSourceScan") {
     val df = spark.read.parquet("src/test/resources/PersistBloomFilter/Testparquet")
     val sparkRadiantSqlApi = new SparkRadiantSqlApi()
-    // create bloomFilter
-    val bf = df.withColumn("aggBlFilter",
-      md5(col("test11")))
-      .filter("test11='5'")
-      .stat.bloomFilter("aggBlFilter", 1000, 0.2)
     val path = "src/test/resources/BloomFilter"
-    // save the bloomFilter to the persistent store
-    sparkRadiantSqlApi.saveBloomFilter(bf, s"$path/TestBloomFilter")
+    // create bloomFilter & save it as persistent bloomfilter
+    sparkRadiantSqlApi.saveBloomFilterFromDF(spark, df.filter("test11='5'"),
+      List("test11"), 1000, s"$path/TestBloomFilter")
     // read the bloomFilter from the persistent store and apply the condition
     var df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
       df,

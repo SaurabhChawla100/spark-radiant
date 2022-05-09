@@ -56,6 +56,36 @@ class BloomFilterIndexImpl extends LazyLogging {
 
   /**
    *
+   * @param spark
+   * @param dataFrame
+   * @param path
+   * @param attrName
+   * @param numberOfItems
+   */
+  def saveBloomFilterFromDF(spark: SparkSession,
+     dataFrame: DataFrame,
+     path: String,
+     attrName: List[String],
+     numberOfItems: Long): Unit = {
+    val sqlUtils = new SparkSqlUtils()
+    var updatedPlan = dataFrame.queryExecution.optimizedPlan
+    val oldAttr = updatedPlan.outputSet.toList
+      .map(_.asInstanceOf[org.apache.spark.sql.catalyst.expressions.NamedExpression])
+    if (oldAttr.map(_.name).count(attr => attrName.contains(attr)) == attrName.size) {
+      val newAttrList = oldAttr ++ List(SparkSqlUtil.aggregatedFilter(
+        attrName, oldAttr, attrDelimiter, aggBlmFilter))
+      updatedPlan = Project(newAttrList, updatedPlan)
+      val bloomFilter = sqlUtils.createDfFromLogicalPlan(spark, updatedPlan).
+        stat.bloomFilter(aggBlmFilter, numberOfItems, 0.2)
+      sqlUtils.saveBloomFilter(bloomFilter, path)
+    } else {
+      logger.warn("Bloom filter cannot be created because of" +
+        " mismatch the aggregated bloomFilter attr")
+    }
+  }
+
+  /**
+   *
    * @param plan
    * @param path
    * @param attrName

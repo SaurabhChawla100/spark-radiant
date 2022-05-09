@@ -203,6 +203,24 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
     val util = new SparkSqlUtils()
     util.saveBloomFilter(filter, path)
   }
+
+  /**
+   * create Persistent Bloom Filter from the dataFrame by aggregating multiple columns
+   * @param spark
+   * @param dataFrame
+   * @param attrName
+   * @param numberOfItems
+   * @param path
+   */
+  def saveBloomFilterFromDF(spark: SparkSession,
+     df: DataFrame,
+     attrName: List[String],
+     numberOfItems: Long,
+     path: String): Unit = {
+    val index = new BloomFilterIndexImpl()
+    index.saveBloomFilterFromDF(spark, df, path, attrName, numberOfItems)
+  }
+
   /**
    * Read the Persistent Bloom Filter
    * @param path
