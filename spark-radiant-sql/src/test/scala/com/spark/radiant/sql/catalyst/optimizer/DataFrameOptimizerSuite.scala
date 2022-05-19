@@ -216,6 +216,44 @@ class DataFrameOptimizerSuite extends AnyFunSuite
     deleteDir(path)
   }
 
+  test("create persist bloomFilter,save and read for dsV2") {
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+    val df = spark.read.parquet("src/test/resources/PersistBloomFilter/Testparquet")
+    val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+    val path = "src/test/resources/BloomFilter"
+    // create bloomFilter & save it as persistent bloomfilter
+    sparkRadiantSqlApi.saveBloomFilterFromDF(spark, df.filter("test11='5'"),
+      List("test11"), 1000, s"$path/TestBloomFilter")
+    // read the bloomFilter from the persistent store and apply the condition
+    var df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
+      df,
+      s"$path/TestBloomFilter", List("test11"))
+    var filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    val utils = new SparkSqlUtils()
+    val expr = utils.getSplittedByAndPredicates(filter.get.expressions.head)
+    assert(expr.filter(_.isInstanceOf[PersistBloomFilterExpr]).size == 1)
+    filter.get.expressions.head.isInstanceOf[PersistBloomFilterExpr]
+    assert(df1.collect().length == 1)
+    // Aggregated keys not present in projection
+    df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
+      df.select("test11"),
+      s"$path/TestBloomFilter", List("test11", "test12"))
+    filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isEmpty, "Bloom filter is not applied" +
+      " since aggregate keys are not present in the projection")
+    // Aggregated keys in the persist bloomFilter is different than the
+    // keys provided in select query return empty result
+    df1 = sparkRadiantSqlApi.applyBloomFilterToDF(spark,
+      df,
+      s"$path/TestBloomFilter", List("test11", "test12"))
+    filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    assert(df1.collect().length == 0)
+    deleteDir(path)
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text,parquet")
+  }
+
 }
 
 case class StructDropDup(c1: Int, c2: Int)
