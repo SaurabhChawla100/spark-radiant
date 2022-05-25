@@ -21,10 +21,11 @@ import com.spark.radiant.core.config.CoreConf
 import com.spark.radiant.core.sparkCoreInfo.{JobInfo, StageInfo, TaskInfo}
 import com.typesafe.scalalogging.LazyLogging
 
-import org.apache.spark.{SparkConf, SparkCoreUtils, TaskFailedReason}
+import org.apache.spark.{PublishMetrics, SparkConf, SparkCoreUtils, TaskFailedReason}
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.SparkSession
 
+import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.LinkedHashMap
 
@@ -38,6 +39,7 @@ import scala.collection.mutable.LinkedHashMap
 class SparkJobMetricsCollector extends SparkListener with LazyLogging {
 
   private val jobInfoMap: HashMap[Long, JobInfo] = HashMap.empty
+  private val jobToStages = new mutable.HashMap[Int, Set[Int]]
   private val stageInfoMap: LinkedHashMap[Long, StageInfo] = LinkedHashMap.empty
   private val taskInfoMap: HashMap[Long, Seq[TaskInfo]] = HashMap.empty
   private var startTime: Long = 0
@@ -53,9 +55,17 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
     val jobInfo = jobInfoMap.getOrElseUpdate(jobStart.jobId,
       JobInfo(jobStart.jobId, jobStart.time))
     jobInfoMap.put(jobStart.jobId, jobInfo)
+    jobToStages += jobStart.jobId -> jobStart.stageIds.toSet
   }
 
   override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
+    val stageInfo: Set[Int] = jobToStages.get(jobEnd.jobId).get
+    stageInfo.foreach { info =>
+      val stageInfoValue = stageInfoMap.getOrElseUpdate(info,
+        StageInfo(info, 0))
+      stageInfoValue.jobId = jobEnd.jobId
+    }
+    jobToStages.remove(jobEnd.jobId)
     val jobInfo = jobInfoMap.getOrElseUpdate(jobEnd.jobId,
       JobInfo(jobEnd.jobId, 0, jobEnd.time))
     jobInfo.jobEnd = jobEnd.time
@@ -77,6 +87,7 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
           stageInfoMapDisplay.put(next._1, next._2)
           stageInfoMap.remove(next._1)
         }
+        publishStageLevelMetrics(stageInfoMapDisplay)
         showStageLevelMetrics(stageInfoMapDisplay)
       }
     }
@@ -244,7 +255,20 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
     println(s"Total Time taken by Application:: $completionTime sec")
     println()
     showDriverMetrics(completionTime)
+    publishStageLevelMetrics(stageInfoMap)
     showStageLevelMetrics(stageInfoMap)
+  }
+
+  private def publishStageLevelMetrics(
+     stageInfoMap: LinkedHashMap[Long, StageInfo]): Unit = {
+    val className: Option[String] = Some(sparkConf.get("spark.radiant.metrics.publishClassName",
+      "com.spark.radiant.core.SamplePublishMetrics"))
+    val publisher = className match {
+      // scalastyle:off
+      case Some(name) => Class.forName(name).newInstance().asInstanceOf[PublishMetrics]
+      case None => new SamplePublishMetrics()
+    }
+    publisher.publishStageLevelMetrics(stageInfoMap)
   }
 
   private def addSkewTaskInfo(): Unit = {

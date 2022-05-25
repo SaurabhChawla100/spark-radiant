@@ -279,8 +279,12 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    
    a) **Metrics Collector** - SparkJobMetricsCollector is used for collecting the important metrics to Spark Driver Memory,
         Stage metrics, Task Metrics. This is enabled by using the configuration
-        --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector and providing the jars in the class path 
-        using
+        --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector and providing the jars in the class path. 
+        User can also Publish the metrics by their own custom Publisher class by extending the org.apache.spark.PublishMetrics interface
+        and override the publishStageLevelMetrics method. SamplePublishMetrics class already added in project for reference and there 
+        is need to provide the custom Publish class name in this conf while running the spark Application
+        --conf spark.radiant.metrics.publishClassName=com.spark.radiant.core.SamplePublishMetrics
+        
 
    ```
      ./bin/spark-shell --conf spark.extraListeners=com.spark.radiant.core.SparkJobMetricsCollector --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.3,io.github.saurabhchawla100:spark-radiant-core:1.0.3"
@@ -298,90 +302,94 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    *****Stage Info Metrics*****
    ***** Stage Info Metrics Stage Id:0 *****
    {
-   "Stage Id": 0,
-   "Final Stage Status": succeeded,
-   "Number of Task": 10,
-   "Total Executors ran to complete all Task": 2,
-   "Stage Completion Time": 858 ms,
-   "Stage Completion Time Recommendation": With 2x executors(4), time to complete stage 366 ms. 
-    With 4x executors(8), time to complete stage 183 ms.,
-   "Average Task Completion Time": 139 ms
-   "Number of Task Failed in this Stage": 0
-   "Few Skew task info in Stage": Skew task in not present in this stage
-   "Few Failed task info in Stage": Failed task in not present in this stage
+   "Job Id":"0",
+   "Stage Id":"0",
+   "Final Stage Status":"succeeded",
+   "Number of Task":"10",
+   "Total Executors ran to complete all Task":"2",
+   "Stage Completion Time":"858 ms",
+   "Stage Completion Time Recommendation":"With 2x executors(4), time to complete stage 366 ms.
+    With 4x executors(8), time to complete stage 183 ms.",
+   "Average Task Completion Time":"139 ms"
+   "Number of Task Failed in this Stage":"0"
+   "Few Skew task info in Stage":"Skew task in not present in this stage"
+   "Few Failed task info in Stage":"Failed task in not present in this stage"
    }
    ***** Stage Info Metrics Stage Id:1 *****
    {
-   "Stage Id": 1,
-   "Final Stage Status": succeeded,
-   "Number of Task": 10,
-   "Total Executors ran to complete all Task": 2,
-   "Stage Completion Time": 53 ms,
-   "Stage Completion Time Recommendation": With 2x executors(4), time to complete stage 23 ms. 
-    With 4x executors(8), time to complete stage 12 ms.,
-   "Average Task Completion Time": 9 ms
-   "Number of Task Failed in this Stage": 0
-   "Few Skew task info in Stage": Skew task in not present in this stage
-   "Few Failed task info in Stage": Failed task in not present in this stage
+   "Job Id":"1",
+   "Stage Id":"1",
+   "Final Stage Status":"succeeded",
+   "Number of Task":"10",
+   "Total Executors ran to complete all Task":"2",
+   "Stage Completion Time":"53 ms",
+   "Stage Completion Time Recommendation":"With 2x executors(4), time to complete stage 23 ms.
+    With 4x executors(8), time to complete stage 12 ms.",
+   "Average Task Completion Time":"9 ms"
+   "Number of Task Failed in this Stage":"0"
+   "Few Skew task info in Stage":"Skew task in not present in this stage"
+   "Few Failed task info in Stage":"Failed task in not present in this stage"
    }
    ***** Stage Info Metrics Stage Id:2 *****
    {
-   "Stage Id": 2,
-   "Final Stage Status": succeeded,
-   "Number of Task": 100,
-   "Total Executors ran to complete all Task": 4,
-   "Stage Completion Time": 11206 ms,
-   "Stage Completion Time Recommendation": With 2x executors(8), time to complete stage 10656 ms. 
-    With 4x executors(16), time to complete stage 10656 ms.,
-   "Average Task Completion Time": 221 ms
-   "Number of Task Failed in this Stage": 0
+   "Job Id":"2",
+   "Stage Id":"2",
+   "Final Stage Status":"succeeded",
+   "Number of Task":"100",
+   "Total Executors ran to complete all Task":"4",
+   "Stage Completion Time":"11206 ms",
+   "Stage Completion Time Recommendation":"With 2x executors(8), time to complete stage 10656 ms.
+    With 4x executors(16), time to complete stage 10656 ms.",
+   "Average Task Completion Time":"221 ms"
+   "Number of Task Failed in this Stage":"0"
    "Few Skew task info in Stage": List({
-   "Task Id": 0,
-   "Executor Id": 3,
-   "Number of records read": 11887,
-   "Number of shuffle read Record": 11887,
-   "Number of records write": 0,
-   "Number of shuffle write Record": 0,
-   "Task Completion Time": 10656 ms
-   "Final Status of task": SUCCESS
-   "Failure Reason for task": NA
+   "Task Id":"0",
+   "Executor Id":"3",
+   "Number of records read":"11887",
+   "Number of shuffle read Record":"11887",
+   "Number of records write":"0",
+   "Number of shuffle write Record":"0",
+   "Task Completion Time":"10656 ms"
+   "Final Status of task":"SUCCESS"
+   "Failure Reason for task":"NA"
    }, {
-   "Task Id": 4,
-   "Executor Id": 1,
-   "Number of records read": 11847,
-   "Number of shuffle read Record": 11847,
-   "Number of records write": 0,
-   "Number of shuffle write Record": 0,
-   "Task Completion Time": 10013 ms
-   "Final Status of task": SUCCESS
-   "Failure Reason for task": NA
+   "Task Id":"4",
+   "Executor Id":"1",
+   "Number of records read":"11847",
+   "Number of shuffle read Record":"11847",
+   "Number of records write":"0",
+   "Number of shuffle write Record":"0",
+   "Task Completion Time":"10013 ms"
+   "Final Status of task":"SUCCESS"
+   "Failure Reason for task":"NA"
    })
-   "Few Failed task info in Stage": Failed task in not present in this stage
+   "Few Failed task info in Stage":"Failed task in not present in this stage"
    }
    ***** Stage Info Metrics Stage Id:3 *****
    {
-   "Stage Id": 3,
-   "Final Stage Status": failed,
-   "Number of Task": 10,
-   "Total Executors ran to complete all Task": 2,
-   "Stage Completion Time": 53 ms,
-   "Average Task Completion Time": 9 ms
-   "Number of Task Failed in this Stage": 1
-   "Few Skew task info in Stage": Skew task in not present in this stage
-   "Few Failed task info in Stage": List({
-   "Task Id": 12,
-   "Executor Id": 1,
-   "Number of records read in task": 0,
-   "Number of shuffle read Record in task": 0,
-   "Number of records write in task": 0,
-   "Number of shuffle write Record in task": 0,
-   "Final Status of task": FAILED,
-   "Task Completion Time": 7 ms,
-   "Failure Reason for task": java.lang.Exception: Retry Task
+   "Job Id":"3",
+   "Stage Id":"3",
+   "Final Stage Status":"failed",
+   "Number of Task":"10",
+   "Total Executors ran to complete all Task":"2",
+   "Stage Completion Time":"53 ms",
+   "Average Task Completion Time":"9 ms"
+   "Number of Task Failed in this Stage":"1"
+   "Few Skew task info in Stage":"Skew task in not present in this stage"
+   "Few Failed task info in Stage":List({
+   "Task Id":"12",
+   "Executor Id":"1",
+   "Number of records read in task":"0",
+   "Number of shuffle read Record in task":"0",
+   "Number of records write in task":"0",
+   "Number of shuffle write Record in task":"0",
+   "Final Status of task":"FAILED",
+   "Task Completion Time":"7 ms",
+   "Failure Reason for task":"java.lang.Exception: Retry Task
          at $line14.$read$$iw$$iw$$iw$$iw$$iw$$iw$$iw$$iw.$anonfun$res0$1(<console>:33)
          at scala.runtime.java8.JFunction1$mcII$sp.apply(JFunction1$mcII$sp.java:23)
          at scala.collection.Iterator$$anon$10.next(Iterator.scala:461)
-         at scala.collection.Iterator$$anon$10.next(Iterator.scala:461)
+         at scala.collection.Iterator$$anon$10.next(Iterator.scala:461)"
    })
    }
     ```

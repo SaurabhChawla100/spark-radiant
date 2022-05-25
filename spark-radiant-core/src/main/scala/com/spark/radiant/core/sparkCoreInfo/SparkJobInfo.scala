@@ -30,31 +30,33 @@ case class StageInfo (
    var failedTaskCount: Long = 0L,
    var recommendedCompute: Option[String] = Some("No Benefit"),
    var skewTaskInfo: Option[Seq[TaskInfo]] = None,
-   var failedTaskInfo: Option[Seq[TaskInfo]] = None) {
+   var failedTaskInfo: Option[Seq[TaskInfo]] = None,
+   var jobId: Long = 0L) {
 
   override def toString(): String = {
     val stageCompletionTime = stageEndTime - stageStart
     val skewTaskInfoValue = if (skewTaskInfo.isDefined) {
       skewTaskInfo.get.toString()
     } else {
-      "Skew task in not present in this stage"
+      "\"Skew task in not present in this stage\""
     }
     val failedTaskInfoValue = if (failedTaskInfo.isDefined) {
       failedTaskInfo.get.toString()
     } else {
-      "Failed task in not present in this stage"
+      "\"Failed task in not present in this stage\""
     }
     s"""{
-       | "Stage Id": $stageId,
-       | "Final Stage Status": $stageStatus,
-       | "Number of Task": $totalTask,
-       | "Total Executors ran to complete all Task": $numberOfExecutor,
-       | "Stage Completion Time": $stageCompletionTime ms,
-       | "Stage Completion Time Recommendation": ${recommendedCompute.get},
-       | "Average Task Completion Time": $meanTaskCompletionTime ms,
-       | "Number of Task Failed in this Stage": $failedTaskCount,
-       | "Few Skew task info in Stage": $skewTaskInfoValue,
-       | "Few Failed task info in Stage": $failedTaskInfoValue
+       | "Job Id":"$jobId",
+       | "Stage Id":"$stageId",
+       | "Final Stage Status":"$stageStatus",
+       | "Number of Task":"$totalTask",
+       | "Total Executors ran to complete all Task":"$numberOfExecutor",
+       | "Stage Completion Time":"$stageCompletionTime ms",
+       | "Stage Completion Time Recommendation":"${recommendedCompute.get}",
+       | "Average Task Completion Time":"$meanTaskCompletionTime ms",
+       | "Number of Task Failed in this Stage":"$failedTaskCount",
+       | "Few Skew task info in Stage":$skewTaskInfoValue,
+       | "Few Failed task info in Stage":$failedTaskInfoValue
     }""".stripMargin
   }
 }
@@ -72,15 +74,15 @@ case class TaskInfo (
 
   override def toString(): String = {
     s"""{
-       | "Task Id": $taskId,
-       | "Executor Id": $executorId,
-       | "Number of records read in task": $recordsRead,
-       | "Number of shuffle read Record in task": $shuffleReadRecord,
-       | "Number of records write in task": $recordsWrite,
-       | "Number of shuffle write Record in task": $shuffleWriteRecord,
-       | "Task Completion Time": $taskCompletionTime ms,
-       | "Final Status of task": $taskStatus,
-       | "Failure Reason for task": $failedTaskEndReason
+       | "Task Id":"$taskId",
+       | "Executor Id":"$executorId",
+       | "Number of records read in task":"$recordsRead",
+       | "Number of shuffle read Record in task":"$shuffleReadRecord",
+       | "Number of records write in task":"$recordsWrite",
+       | "Number of shuffle write Record in task":"$shuffleWriteRecord",
+       | "Task Completion Time":"$taskCompletionTime ms",
+       | "Final Status of task":"$taskStatus",
+       | "Failure Reason for task":"$failedTaskEndReason"
     }""".stripMargin
   }
 }
