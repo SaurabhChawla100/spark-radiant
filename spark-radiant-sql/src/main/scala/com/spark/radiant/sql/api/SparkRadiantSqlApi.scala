@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession, SparkSessionExtensions, Strategy}
 import org.apache.spark.sql.sparkRadiantUtil.SparkSqlUtil
 import org.apache.spark.util.sketch.BloomFilter
 
@@ -46,6 +46,10 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
     com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
     com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
   )
+
+  private[api] val seqExtraStrategy: Seq[Strategy] =
+    Seq(org.apache.spark.sql.ApplyExtraSparkStrategy
+    )
 
   /**
    *
@@ -248,7 +252,7 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
 }
 
 /**
- * SparkRadiantSqlExtension - Inject the extra Optimizations rule
+ * SparkRadiantSqlExtension - Inject the extra Optimizations rule and extra spark Strategy using
  * --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
  */
 class SparkRadiantSqlExtension extends (SparkSessionExtensions => Unit) {
@@ -257,6 +261,9 @@ class SparkRadiantSqlExtension extends (SparkSessionExtensions => Unit) {
     // inject the extra Optimizer rule
     sqlApi.seqRule.foreach { rule =>
       sparkExt.injectOptimizerRule(_ => rule)
+    }
+    sqlApi.seqExtraStrategy.foreach { strategy =>
+      sparkExt.injectPlannerStrategy(_ => strategy)
     }
   }
 }
