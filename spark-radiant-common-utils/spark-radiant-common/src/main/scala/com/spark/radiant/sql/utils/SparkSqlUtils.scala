@@ -52,8 +52,9 @@ class SparkSqlUtils extends Serializable {
   }
 
   def createDfFromLogicalPlan(spark: SparkSession, logicalPlan: LogicalPlan): DataFrame = {
-    // scalastyle:off
+    // scalastyle:off classforname
     val cls = Class.forName("org.apache.spark.sql.Dataset")
+    // scalastyle:on classforname
     val method = cls.getMethod("ofRows", classOf[SparkSession], classOf[LogicalPlan])
     method.invoke(cls, spark, logicalPlan).asInstanceOf[Dataset[_]].toDF
   }
@@ -179,7 +180,7 @@ class SparkSqlUtils extends Serializable {
           filter
         }
         value match {
-          case Long| Int| Short| IntegerType| LongType| ShortType  =>
+          case Long| Int| Short| IntegerType| LongType| ShortType =>
             theFilter.putLong(value.asInstanceOf[Long])
           case _ => theFilter.put(value)
         }
@@ -199,9 +200,10 @@ class SparkSqlUtils extends Serializable {
   }
 
   def getHadoopConf(): Configuration = {
-    // scalastyle:off
+    // scalastyle:off classforname
     val sparkHadoopUtilClass = Class.forName(
       "org.apache.spark.deploy.SparkHadoopUtil")
+    // scalastyle:on classforname
     val sparkHadoopUtil = sparkHadoopUtilClass.newInstance()
     val newConfigurationMethod = sparkHadoopUtilClass.getMethod(
       "newConfiguration", classOf[SparkConf])

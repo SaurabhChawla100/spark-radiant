@@ -136,9 +136,10 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
                             baseDataFrame: DataFrame): DataFrame = {
     try {
       val column = columnNameValue.unzip
-      // scalastyle:off
       // using the reflection code to call the method withColumns
+      // scalastyle:off classforname
       val dataSetClass = Class.forName("org.apache.spark.sql.Dataset")
+      // scalastyle:on classforname
       val newConfigurationMethod =
         dataSetClass.getMethod("withColumns", classOf[Seq[String]], classOf[Seq[Column]])
       newConfigurationMethod.invoke(
@@ -169,7 +170,7 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
         structMap.put(x, new org.apache.spark.sql.Column(x))
       }
     }
-    val updatedDF =  if (structMap.nonEmpty) {
+    val updatedDF = if (structMap.nonEmpty) {
       useWithColumnsOfSpark(structMap, dataFrame)
     } else {
       dataFrame
