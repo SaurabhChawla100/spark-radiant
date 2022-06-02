@@ -264,8 +264,9 @@ class SparkJobMetricsCollector extends SparkListener with LazyLogging {
     val className: Option[String] = Some(sparkConf.get("spark.radiant.metrics.publishClassName",
       "com.spark.radiant.core.SamplePublishMetrics"))
     val publisher = className match {
-      // scalastyle:off
+      // scalastyle:off classforname
       case Some(name) => Class.forName(name).newInstance().asInstanceOf[PublishMetrics]
+      // scalastyle:on classforname
       case None => new SamplePublishMetrics()
     }
     publisher.publishStageLevelMetrics(stageInfoMap)
