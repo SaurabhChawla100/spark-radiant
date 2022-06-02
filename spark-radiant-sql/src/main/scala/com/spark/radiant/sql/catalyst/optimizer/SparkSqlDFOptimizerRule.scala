@@ -82,8 +82,9 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
 
   private def createDfFromLogicalPlan(spark: SparkSession,
      logicalPlan: LogicalPlan): DataFrame = {
-    // scalastyle:off
+    // scalastyle:off classforname
     val cls = Class.forName("org.apache.spark.sql.Dataset")
+    // scalastyle:on classforname
     val method = cls.getMethod("ofRows", classOf[SparkSession], classOf[LogicalPlan])
     method.invoke(cls, spark, logicalPlan).asInstanceOf[Dataset[_]].toDF
   }
@@ -112,11 +113,11 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
     var filterToCreateDF: Seq[Expression] = Seq.empty
 
     val exprOut = planForDf match {
-      case Filter(_, LocalRelation(output, _ ,_)) => output.map(_.exprId)
-      case Filter(_, LogicalRelation(_, output ,_, _)) => output.map(_.exprId)
-      case Filter(_, HiveTableRelation(_, output ,_, _,_)) => output.map(_.exprId)
+      case Filter(_, LocalRelation(output, _, _)) => output.map(_.exprId)
+      case Filter(_, LogicalRelation(_, output, _, _)) => output.map(_.exprId)
+      case Filter(_, HiveTableRelation(_, output, _, _, _)) => output.map(_.exprId)
       case Filter(_, InMemoryRelation(output, _, _)) => output.map(_.exprId)
-      case Filter(_, DataSourceV2ScanRelation(_, _ , output)) => output.map(_.exprId)
+      case Filter(_, DataSourceV2ScanRelation(_, _, output)) => output.map(_.exprId)
       case Filter(_, DataSourceV2Relation(_, output, _, _, _)) => output.map(_.exprId)
       case _ => planForDf.output.map(_.exprId)
     }
@@ -283,7 +284,7 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
           filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       // For supporting the DataSourceV2 when this rule is added as the part
       // of spark.sql.extensions
-      case filter@Filter(_, DataSourceV2Relation(_,_,_,_,_)) if !hold =>
+      case filter@Filter(_, DataSourceV2Relation(_, _, _, _, _)) if !hold =>
         getPlanFromJoinCondition(spark, bloomFilterKeyAppender, rightSideDFPlan,
           filter, predicateOutputInDF, bloomFilterCount, updatedJoinAttr)
       case localTableScan: LocalRelation if !hold =>
@@ -332,25 +333,25 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
     }
   }
 
-  private def compareJoinSides()(implicit spark: SparkSession):  Boolean = {
+  private def compareJoinSides()(implicit spark: SparkSession): Boolean = {
     spark.conf.get("spark.sql.dynamicfilter.comparejoinsides",
       spark.sparkContext.getConf.get("spark.sql.dynamicfilter.comparejoinsides",
         "false")).toBoolean
   }
 
-  private def pushDownAllJoinKeyValues()(implicit spark: SparkSession):  Boolean = {
+  private def pushDownAllJoinKeyValues()(implicit spark: SparkSession): Boolean = {
     spark.conf.get("spark.sql.dynamicFilter.pushdown.allJoinKey",
       spark.sparkContext.getConf.get("spark.sql.dynamicFilter.pushdown.allJoinKey",
         "true")).toBoolean
   }
 
-  private def useDynamicFilterInBHJ()(implicit spark: SparkSession):  Boolean = {
+  private def useDynamicFilterInBHJ()(implicit spark: SparkSession): Boolean = {
     spark.conf.get("spark.sql.use.dynamicfilter.bhj",
       spark.sparkContext.getConf.get("spark.sql.use.dynamicfilter.bhj",
         "false")).toBoolean
   }
 
-  private def createBloomFilterFromRDD()(implicit spark: SparkSession):  Boolean = {
+  private def createBloomFilterFromRDD()(implicit spark: SparkSession): Boolean = {
     spark.conf.get("spark.sql.create.bloomfilter.rdd",
       spark.sparkContext.getConf.get("spark.sql.create.bloomfilter.rdd",
         "true")).toBoolean
@@ -366,7 +367,7 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
   private def getOptimizedLogicalPlan(
      plan: LogicalPlan,
      bloomFilterCount: Long)(implicit spark: SparkSession): LogicalPlan = {
-    logger.debug("Initial plan: "+ plan)
+    logger.debug(s"Initial plan: $plan")
     val updatedPlan = plan.transform {
       case join: Join if validJoinForDynamicFilter(join.joinType) =>
         var joinCondition: Option[Expression] = None
@@ -388,7 +389,7 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
             case _ => false
           }
           var joinAttr = joinKeys.map(x =>
-            (x.asInstanceOf[EqualTo].left,x.asInstanceOf[EqualTo].right)).toList
+            (x.asInstanceOf[EqualTo].left, x.asInstanceOf[EqualTo].right)).toList
           // filter out both left and right side attribute. This will remove
           // the join condition which is of type comparison of one of the predicate of table
           // and another one is string, int, double etc for eg a.value = 'testDF', this
