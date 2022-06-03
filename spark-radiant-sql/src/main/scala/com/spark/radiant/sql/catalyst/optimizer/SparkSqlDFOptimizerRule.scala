@@ -21,21 +21,23 @@ import com.spark.radiant.sql.utils.SparkSqlUtils
 import com.typesafe.scalalogging.LazyLogging
 
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference,
-  Cast, ConcatWs, EqualTo, Expression, In, Literal, Md5, Or}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute,
+  AttributeReference, Cast, ConcatWs, EqualTo, Expression, In, Literal, Md5, Or}
 import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftAnti, LeftOuter,
   LeftSemi, RightOuter}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.execution.columnar.InMemoryRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation,
+  DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.orc.OrcScan
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
-import org.apache.spark.sql.functions.{col, concat_ws, lit, md5}
+import org.apache.spark.sql.functions.{col, md5}
 import org.apache.spark.sql.sources.{Filter => V2Filter}
 import org.apache.spark.sql.types.{BinaryType, StringType}
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Column, CustomFilter, DataFrame,
+  Dataset, SparkSession}
 import org.apache.spark.util.sketch.BloomFilter
 
 private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable {
@@ -380,8 +382,13 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
         val bhjPresent = (join.left.stats.sizeInBytes <= bhjThreshold
           || join.right.stats.sizeInBytes <= bhjThreshold) && !useDynamicFilterInBHJ
 
+        // check Custom Filter is present or not and apply DF to
+        // the plan if CustomFilter not present
+        val customFilterPresent = join.left.find(_.isInstanceOf[CustomFilter]).isDefined ||
+          join.right.find(_.isInstanceOf[CustomFilter]).isDefined
+
         // if bhjPresent is not present than only add this logic
-        if (!bhjPresent && joinCondition.isDefined
+        if (!customFilterPresent && !bhjPresent && joinCondition.isDefined
           && joinCondition.get.find(_.isInstanceOf[Or]).isEmpty) {
           val predicates = joinCondition.map(getSplittedByAndPredicates).getOrElse(Nil)
           val joinKeys = predicates.filter {

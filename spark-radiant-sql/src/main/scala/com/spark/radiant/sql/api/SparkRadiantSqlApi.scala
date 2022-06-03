@@ -41,15 +41,15 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
 
   private[api] val seqRule: Seq[Rule[LogicalPlan]] =
     Seq(com.spark.radiant.sql.catalyst.optimizer.SizeBasedJoinReOrdering,
-    com.spark.radiant.sql.catalyst.optimizer.UnionReuseExchangeOptimizeRule,
-    com.spark.radiant.sql.catalyst.optimizer.ExchangeOptimizeRule,
-    com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
-    com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
+      com.spark.radiant.sql.catalyst.optimizer.JoinReuseExchangeOptimizeRule,
+      com.spark.radiant.sql.catalyst.optimizer.UnionReuseExchangeOptimizeRule,
+      com.spark.radiant.sql.catalyst.optimizer.ExchangeOptimizeRule,
+      com.spark.radiant.sql.catalyst.optimizer.ExplodeOptimizeRule,
+      com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
   )
 
   private[api] val seqExtraStrategy: Seq[Strategy] =
-    Seq(org.apache.spark.sql.ApplyExtraSparkStrategy
-    )
+    Seq(org.apache.spark.sql.ApplyExtraSparkStrategy)
 
   /**
    *
