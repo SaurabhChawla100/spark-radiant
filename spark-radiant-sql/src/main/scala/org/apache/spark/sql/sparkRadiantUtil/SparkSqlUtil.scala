@@ -17,9 +17,8 @@
 
 package org.apache.spark.sql.sparkRadiantUtil
 
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{Alias, Cast,
-  ConcatWs, Literal, Md5, NamedExpression}
+import org.apache.spark.sql.{SparkSession, Strategy}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, ConcatWs, Literal, Md5, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.types.BinaryType
@@ -36,10 +35,15 @@ object SparkSqlUtil {
    * @param sparkSession
    * @param seqRule
    */
-  def injectRule(sparkSession: SparkSession, seqRule: Seq[Rule[LogicalPlan]]): Unit = {
+  def injectRule(sparkSession: SparkSession,
+    seqRule: Seq[Rule[LogicalPlan]],
+    strategy: Seq[Strategy]): Unit = {
     // inject the extra Optimizer rule
     seqRule.foreach { rule =>
       sparkSession.extensions.injectOptimizerRule(_ => rule)
+    }
+    strategy.foreach { strategy =>
+      sparkSession.extensions.injectPlannerStrategy(_ => strategy)
     }
   }
 
