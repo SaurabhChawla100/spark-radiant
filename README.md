@@ -213,8 +213,22 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
               spark._jvm.com.spark.radiant.sql.api.SparkRadiantSqlApi().addOptimizerRule(spark._jsparkSession) 
    
       ```
+   
+   f) **JoinReuseExchangeOptimizeRule** - This rule works for scenarios JoinReuseExchangeOptimizeRule works for scenario where
+      there is join between same table and the scan of table happens multiple times.After Applying this rule File Scan
+      will take place once. This feature is enabled using --conf spark.sql.optimize.join.reuse.exchange.rule=true
+      There is need to add this conf for adding this rule in Sql Extension
+      --conf spark.sql.extensions=com.spark.radiant.sql.api.SparkRadiantSqlExtension
 
-   f) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
+      ```
+        spark.sql("""select * from
+        (select col_1, count(col_1) count from table1 where col_2 in ('value0', 'value09') group by col_1) a,
+        (select col_1, max(col_2) max from table1 where col_2 in ('value0', 'value1', 'value119') group by col_1) b where a.col_1=b.col_1""")
+      ```
+      Please refer the spark Plan execution for [JoinReuseExchangeOptimizeRule](docs/Snapshots/JoinReUseExchangeOptimize.png)
+      #### JoinReuseExchangeOptimizeRule works 2X faster than the regular Spark Join for this query.
+
+   g) **ExchangeOptimizeRule** - This optimizer rule works for scenarios where partial aggregate exchange is
       present and also the exchange which is introduced by SMJ and other join that add the shuffle exchange, So in total
       there are 2 exchange present in the executed plan and cost of creating both exchange are almost same. In that scenario
       we skip the exchange created by the partial aggregate and there will be only one exchange and partial and complete
@@ -245,7 +259,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ```
    
-   g) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
+   h) **ExplodeOptimizeRule** - This optimizer rule works for scenarios where Explode is present with aggregation,
    So there will be exchange after partial aggregation and there are scenarios where cost of partial aggregate + exchange
    is high. In those scenarios it's better to have exchange first and then apply both partial aggregate and complete
    aggregate on the exchange. This can be enabled using --conf spark.sql.optimize.explode.rule=true
@@ -273,7 +287,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
 
       ```
 
-   h)  **BloomFilter Index** - This is WIP
+   i)  **BloomFilter Index** - This is WIP
 
 2) **spark-radiant-core** - This contains the optimization related to total cost optimization.
    

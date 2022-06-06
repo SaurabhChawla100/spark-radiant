@@ -186,6 +186,7 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
   def addOptimizerRule(spark: SparkSession): Unit = {
     // Importing the extra Optimizations rule
     spark.experimental.extraOptimizations = seqRule
+    spark.experimental.extraStrategies = seqExtraStrategy
   }
 
   /**
@@ -194,7 +195,7 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
    */
   def addOptimizerRuleInSqlExt(spark: SparkSession): Unit = {
     // Importing the extra Optimizations rule in extendedOperatorOptimizationRules
-    SparkSqlUtil.injectRule(spark, seqRule)
+    SparkSqlUtil.injectRule(spark, seqRule, seqExtraStrategy)
   }
 
   /**
