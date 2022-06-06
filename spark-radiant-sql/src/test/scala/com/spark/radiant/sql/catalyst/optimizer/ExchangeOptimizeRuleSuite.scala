@@ -20,7 +20,7 @@ package com.spark.radiant.sql.catalyst.optimizer
 import com.spark.radiant.sql.api.SparkRadiantSqlApi
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{CustomFilter, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.RepartitionByExpression
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.adaptive.ShuffleQueryStageExec
@@ -58,6 +58,7 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
     spark = createSparkSession(sparkConf)
     spark.sql("set spark.sql.skip.partial.exchange.rule=true")
     spark.sql("set spark.sql.optimize.union.reuse.exchange.rule=true")
+    spark.sql("set spark.sql.optimize.join.reuse.exchange.rule=true")
     sparkContext.setLogLevel("ERROR")
     var df = spark.createDataFrame(Seq((1, 1), (1, 2),
       (2, 1), (2, 1), (2, 3), (3, 2), (3, 3))).toDF("test11", "test12")
@@ -77,6 +78,7 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
 
     // adding Extra optimizer rule
     val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+    // sparkRadiantSqlApi.addOptimizerRuleInSqlExt(spark)
     sparkRadiantSqlApi.addOptimizerRule(spark)
   }
 
@@ -283,6 +285,50 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
       x.isInstanceOf[RepartitionByExpression]
     }
     assert(updateDFPlan.isEmpty)
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
+  }
+
+  test("test the JoinReuseExchangeOptimizeRule") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.read.parquet("src/test/resources/TestExchangeOptParquet1").
+      createOrReplaceTempView("testDf1")
+    val df = spark.sql("select * from (select test11, count(*) as count from testDf1" +
+      " where test12=1 group by test11) a, (select test11, max(test12) as max" +
+      " from testDf1 where test12 in (1, 2, 4) group by test11) b where b.test11 = a.test11")
+    var updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
+      x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isDefined)
+    updateDFPlan = None
+    updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
+      x.isInstanceOf[CustomFilter]}
+    assert(updateDFPlan.isDefined)
+    df.collect()
+    val executedPlan = df.queryExecution.executedPlan.transform {
+      case ad: AdaptiveSparkPlanExec => ad.executedPlan
+      case sh: ShuffleQueryStageExec => sh.plan
+      case ex => ex
+    }
+    val reuseExchange =
+      executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
+    assert(reuseExchange.nonEmpty)
+  }
+
+  test("test the JoinReuseExchangeOptimizeRule in DSV2") {
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.read.parquet("src/test/resources/TestExchangeOptParquet1").
+      createOrReplaceTempView("testDf1")
+    val df = spark.sql("select * from (select test11, count(test11) as count from testDf1" +
+      " where test12=1 group by test11) a, (select test11, sum(test11) as sum" +
+      " from testDf1 where test12 in (1, 2, 4) group by test11) b where a.test11 = b.test11")
+    var updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
+      x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isDefined)
+    updateDFPlan = None
+    updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
+      x.isInstanceOf[CustomFilter]}
+    assert(updateDFPlan.isDefined)
+    df.collect()
     spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,parquet,text")
   }
 }
