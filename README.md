@@ -214,7 +214,7 @@ This spark-radiant project has 2 modules, you can use those modules in your proj
    
       ```
    
-   f) **JoinReuseExchangeOptimizeRule** - This rule works for scenarios JoinReuseExchangeOptimizeRule works for scenario where
+   f) **JoinReuseExchangeOptimizeRule** - JoinReuseExchangeOptimizeRule works for scenario where
       there is join between same table and the scan of table happens multiple times.After Applying this rule File Scan
       will take place once. This feature is enabled using --conf spark.sql.optimize.join.reuse.exchange.rule=true
       There is need to add this conf for adding this rule in Sql Extension

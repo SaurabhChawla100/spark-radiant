@@ -71,8 +71,9 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
       (3, 3, 7))).toDF("test31", "test32", "test33")
     df.createOrReplaceTempView("testDf3")
     // create the parquet datasource file
-    spark.createDataFrame(Seq((1, 1), (1, 2),
-      (2, 1), (2, 1), (2, 3), (3, 2), (3, 3), (3, 4), (4, 1), (3, 5))).toDF("test11", "test12").
+    spark.createDataFrame(Seq((1, 1, 1), (1, 2, 1),
+      (2, 1, 3), (2, 1, 4), (2, 3, 3), (3, 2, 2), (3, 3, 3),
+      (3, 4, 4), (4, 1, 1), (3, 5, 5))).toDF("test11", "test12", "test13").
       repartition(1).write.mode("overwrite").
       format("parquet").save("src/test/resources/TestExchangeOptParquet1")
 
@@ -295,6 +296,31 @@ class ExchangeOptimizeRuleSuite extends AnyFunSuite
     val df = spark.sql("select * from (select test11, count(*) as count from testDf1" +
       " where test12=1 group by test11) a, (select test11, max(test12) as max" +
       " from testDf1 where test12 in (1, 2, 4) group by test11) b where b.test11 = a.test11")
+    var updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
+      x.isInstanceOf[RepartitionByExpression]}
+    assert(updateDFPlan.isDefined)
+    updateDFPlan = None
+    updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
+      x.isInstanceOf[CustomFilter]}
+    assert(updateDFPlan.isDefined)
+    df.collect()
+    val executedPlan = df.queryExecution.executedPlan.transform {
+      case ad: AdaptiveSparkPlanExec => ad.executedPlan
+      case sh: ShuffleQueryStageExec => sh.plan
+      case ex => ex
+    }
+    val reuseExchange =
+      executedPlan.collectLeaves().filter(_.isInstanceOf[ReusedExchangeExec])
+    assert(reuseExchange.nonEmpty)
+  }
+
+  test("test the JoinReuseExchangeOptimizeRule with different col condition") {
+    spark.sql("set spark.sql.autoBroadcastJoinThreshold=-1")
+    spark.read.parquet("src/test/resources/TestExchangeOptParquet1").
+      createOrReplaceTempView("testDf1")
+    val df = spark.sql("select * from (select test11, count(test11) as count from testDf1" +
+      " where test12=1 group by test11) a, (select test11, max(test12) as max" +
+      " from testDf1 where test13 in (1, 2, 4) group by test11) b where b.test11 = a.test11")
     var updateDFPlan = df.queryExecution.optimizedPlan.find { x =>
       x.isInstanceOf[RepartitionByExpression]}
     assert(updateDFPlan.isDefined)
