@@ -21,7 +21,7 @@ import com.typesafe.scalalogging.LazyLogging
 
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Or}
-import org.apache.spark.sql.{CustomFilter, SparkSession}
+import org.apache.spark.sql.{CustomFilter, CustomProject, SparkSession}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Join,
   LocalRelation, LogicalPlan, Project, Repartition, RepartitionByExpression}
@@ -324,8 +324,14 @@ object JoinReuseExchangeOptimizeRule extends Rule[LogicalPlan] with LazyLogging 
       case agg: Aggregate if !agg.child.isInstanceOf[RepartitionByExpression] =>
         val aggChildUpdated = agg.child match {
           case Project(attr, filter@Filter(_, _)) =>
-            Project(attr, addCustomFilterToPan(filter, spark, cond,
+            val proj = if (useCustomProject(spark)) {
+              CustomProject(attr, addCustomFilterToPan(filter, spark, cond,
               agg.groupingExpressions, preAppendCond))
+            } else {
+              Project(attr, addCustomFilterToPan(filter, spark, cond,
+                agg.groupingExpressions, preAppendCond))
+            }
+            proj
           case filter@Filter(_, _) =>
             addCustomFilterToPan(filter, spark, cond, agg.groupingExpressions, preAppendCond)
           case _ => agg
@@ -339,6 +345,12 @@ object JoinReuseExchangeOptimizeRule extends Rule[LogicalPlan] with LazyLogging 
     spark.conf.get("spark.sql.optimize.join.reuse.exchange.rule",
       spark.sparkContext.getConf.get("spark.sql.optimize.join.reuse.exchange.rule",
         "false")).toBoolean
+  }
+
+  private def useCustomProject(spark: SparkSession): Boolean = {
+    spark.conf.get("spark.sql.radiant.use.custom.project",
+      spark.sparkContext.getConf.get("spark.sql.radiant.use.custom.project",
+        "true")).toBoolean
   }
 
   private def validateGroupingExpr(leftExpr: Seq[Expression],
