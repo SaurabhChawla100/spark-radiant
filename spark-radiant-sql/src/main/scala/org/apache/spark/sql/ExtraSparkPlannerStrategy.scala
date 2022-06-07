@@ -24,6 +24,8 @@ object ApplyExtraSparkStrategy extends Strategy {
   def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case CustomFilter(condition, child) =>
       execution.FilterExec(condition, planLater(child)) :: Nil
+    case CustomProject(attr, child) =>
+      execution.ProjectExec(attr, planLater(child)) :: Nil
     case _ => Nil
   }
 }
