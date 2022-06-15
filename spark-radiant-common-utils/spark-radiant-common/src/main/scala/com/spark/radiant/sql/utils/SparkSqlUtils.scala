@@ -23,14 +23,18 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.{ExecutorService, Executors}
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream, FileSystem, Path}
+import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream, Path}
 
 import org.apache.spark.util.sketch.BloomFilter
 import org.apache.spark.{SparkConf, SparkEnv}
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan, Project}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation,
+  DataSourceV2ScanRelation}
 import org.apache.spark.sql.sources.{Filter => V2Filter}
 import org.apache.spark.sql.types.{IntegerType, LongType, ShortType}
 
@@ -209,5 +213,197 @@ class SparkSqlUtils extends Serializable {
       "newConfiguration", classOf[SparkConf])
     newConfigurationMethod.invoke(
       sparkHadoopUtil, SparkEnv.get.conf).asInstanceOf[Configuration]
+  }
+
+  def checkSameRelForOptPlan(
+     leftPlan: LogicalPlan,
+     rightPlan: LogicalPlan): Boolean = {
+    var optFlag = false
+    leftPlan match {
+      case Project(_, localRel@LocalRelation(_, _, _))
+        if rightPlan.isInstanceOf[Project]
+          && rightPlan.asInstanceOf[Project].child.isInstanceOf[LocalRelation] =>
+        optFlag = (localRel.schema.fieldNames.toSet
+          == rightPlan.asInstanceOf[Project].child
+          .asInstanceOf[LocalRelation].schema.fieldNames.toSet)
+      case Project(_, Filter(_, localRel@LocalRelation(_, _, _)))
+        if rightPlan.isInstanceOf[Project]
+          && rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter]
+          && rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+          .isInstanceOf[LocalRelation] =>
+        optFlag = (localRel.schema.fieldNames.toSet
+          == rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter]
+          .child.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
+      case Project(_, Filter(_, localRel@LocalRelation(_, _, _)))
+        if rightPlan.isInstanceOf[Filter]
+          && rightPlan.asInstanceOf[Filter].child.isInstanceOf[LocalRelation] =>
+        optFlag = (localRel.schema.fieldNames.toSet
+          == rightPlan.asInstanceOf[Filter]
+          .child.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
+      case Filter(_, localRel@LocalRelation(_, _, _))
+        if rightPlan.isInstanceOf[Filter]
+          && rightPlan.asInstanceOf[Filter].child.isInstanceOf[LocalRelation] =>
+        optFlag = (localRel.schema.fieldNames.toSet
+          == rightPlan.asInstanceOf[Filter].child
+          .asInstanceOf[LocalRelation].schema.fieldNames.toSet)
+      case localRel@LocalRelation(_, _, _)
+        if rightPlan.isInstanceOf[LocalRelation] =>
+        optFlag = (localRel.schema.fieldNames.toSet
+          == rightPlan.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
+      case Project(_, Filter(_, logRel@LogicalRelation(_, _, _, _)))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter]
+          && rightPlan.asInstanceOf[Project]
+          .child.asInstanceOf[Filter].child.isInstanceOf[LogicalRelation] =>
+        val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
+        val rightFiles = rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+          .asInstanceOf[LogicalRelation].relation.asInstanceOf[HadoopFsRelation].inputFiles
+        optFlag = leftFiles.toSet == rightFiles.toSet
+      case Project(_, Filter(_, logRel@LogicalRelation(_, _, _, _)))
+        if rightPlan.isInstanceOf[Filter]
+          && rightPlan.asInstanceOf[Filter].child.isInstanceOf[LogicalRelation] =>
+        val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
+        val rightFiles = rightPlan.asInstanceOf[Filter].child
+          .asInstanceOf[LogicalRelation].relation.asInstanceOf[HadoopFsRelation].inputFiles
+        optFlag = leftFiles.toSet == rightFiles.toSet
+      case Filter(_, logRel@LogicalRelation(_, _, _, _))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter]
+          && rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter]
+          .child.isInstanceOf[LogicalRelation] =>
+        val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
+        val rightFiles = rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+          .asInstanceOf[LogicalRelation].relation.asInstanceOf[HadoopFsRelation].inputFiles
+        optFlag = leftFiles.toSet == rightFiles.toSet
+      case Filter(_, logRel@LogicalRelation(_, _, _, _))
+        if rightPlan.isInstanceOf[Filter]
+          && rightPlan.asInstanceOf[Filter].child.isInstanceOf[LogicalRelation] =>
+        val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
+        val rightFiles = rightPlan.asInstanceOf[Filter].child
+          .asInstanceOf[LogicalRelation].relation.asInstanceOf[HadoopFsRelation].inputFiles
+        optFlag = leftFiles.toSet == rightFiles.toSet
+      case Project(_, logRel@LogicalRelation(_, _, _, _))
+        if rightPlan.asInstanceOf[Project].child.isInstanceOf[LogicalRelation] =>
+        val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
+        val rightFiles = rightPlan.asInstanceOf[Project].child.asInstanceOf[LogicalRelation].
+          relation.asInstanceOf[HadoopFsRelation].inputFiles
+        optFlag = leftFiles.toSet == rightFiles.toSet
+      case logRel@LogicalRelation(_, _, _, _) =>
+        val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
+        val rightFiles = rightPlan.asInstanceOf[LogicalRelation].
+          relation.asInstanceOf[HadoopFsRelation].inputFiles
+        optFlag = leftFiles.toSet == rightFiles.toSet
+      case Project(_, hiveRel@HiveTableRelation(_, _, _, _, _))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[HiveTableRelation] =>
+        optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
+      case Project(_, Filter(_, hiveRel@HiveTableRelation(_, _, _, _, _)))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+            .isInstanceOf[HiveTableRelation] =>
+        optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[Project].child
+          .asInstanceOf[Filter].child.asInstanceOf[HiveTableRelation].tableMeta
+      case Project(_, Filter(_, hiveRel@HiveTableRelation(_, _, _, _, _)))
+        if rightPlan.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Filter].child
+            .isInstanceOf[HiveTableRelation] =>
+        optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[Filter]
+          .child.asInstanceOf[HiveTableRelation].tableMeta
+      case Filter(_, hiveRel@HiveTableRelation(_, _, _, _, _))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Project].child
+            .asInstanceOf[Filter].child.isInstanceOf[HiveTableRelation] =>
+        optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[Project].child
+          .asInstanceOf[Filter].child.asInstanceOf[HiveTableRelation].tableMeta
+      case Filter(_, hiveRel@HiveTableRelation(_, _, _, _, _))
+        if rightPlan.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Filter].child.isInstanceOf[HiveTableRelation] =>
+        optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[Filter]
+          .child.asInstanceOf[HiveTableRelation].tableMeta
+      case hiveRel@HiveTableRelation(_, _, _, _, _)
+        if rightPlan.isInstanceOf[HiveTableRelation] =>
+        optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
+      case Project(_, Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _)))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+            .isInstanceOf[DataSourceV2ScanRelation] =>
+        optFlag = dsv2.relation.table.name() ==
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
+      case Project(_, Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _)))
+        if rightPlan.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Filter].child
+            .isInstanceOf[DataSourceV2ScanRelation] =>
+        optFlag = dsv2.relation.table.name() ==
+          rightPlan.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
+      case Project(_, dsv2@DataSourceV2ScanRelation(_, _, _))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[DataSourceV2ScanRelation] =>
+        optFlag = dsv2.relation.table.name() ==
+          rightPlan.asInstanceOf[Project]
+            .child.asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
+      case Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter]
+            .child.isInstanceOf[DataSourceV2ScanRelation] =>
+        optFlag = dsv2.relation.table.name() ==
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
+      case Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _))
+        if rightPlan.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Filter].child.isInstanceOf[DataSourceV2ScanRelation] =>
+        optFlag = dsv2.relation.table.name() ==
+          rightPlan.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
+      case dsv2@DataSourceV2ScanRelation(_, _, _)
+        if rightPlan.isInstanceOf[DataSourceV2ScanRelation] =>
+        optFlag = dsv2.relation.table.name() ==
+          rightPlan.asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
+      case Project(_, Filter(_, dsv2@DataSourceV2Relation(_, _, _, _, _)))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+            .isInstanceOf[DataSourceV2Relation] =>
+        optFlag = dsv2.table ==
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2Relation].table
+      case Project(_, Filter(_, dsv2@DataSourceV2Relation(_, _, _, _, _)))
+        if rightPlan.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Filter].child
+            .isInstanceOf[DataSourceV2Relation] =>
+        optFlag = dsv2.table ==
+          rightPlan.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2Relation].table
+      case Project(_, dsv2@DataSourceV2Relation(_, _, _, _, _))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[DataSourceV2Relation] =>
+        optFlag = dsv2.table ==
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[DataSourceV2Relation].table
+      case Filter(_, dsv2@DataSourceV2Relation(_, _, _, _, _))
+        if rightPlan.isInstanceOf[Project] &&
+          rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter]
+            .child.isInstanceOf[DataSourceV2Relation] =>
+        optFlag = dsv2.table ==
+          rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2Relation].table
+      case Filter(_, dsv2@DataSourceV2Relation(_, _, _, _, _))
+        if rightPlan.isInstanceOf[Filter] &&
+          rightPlan.asInstanceOf[Filter].child.isInstanceOf[DataSourceV2Relation] =>
+        optFlag = dsv2.table ==
+          rightPlan.asInstanceOf[Filter].child
+            .asInstanceOf[DataSourceV2Relation].table
+      case dsv2@DataSourceV2Relation(_, _, _, _, _)
+        if rightPlan.isInstanceOf[DataSourceV2Relation] =>
+        optFlag = dsv2.table ==
+          rightPlan.asInstanceOf[DataSourceV2Relation].table
+      case _ =>
+    }
+    optFlag
   }
 }
