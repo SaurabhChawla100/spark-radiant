@@ -17,6 +17,8 @@
 
 package com.spark.radiant.sql.catalyst.optimizer
 
+import com.spark.radiant.sql.utils.SparkSqlUtils
+
 import com.typesafe.scalalogging.LazyLogging
 
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -24,8 +26,8 @@ import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate,
-  LocalRelation, LogicalPlan, Project, Repartition, RepartitionByExpression, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LocalRelation,
+  LogicalPlan, Project, Repartition, RepartitionByExpression, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 
@@ -112,55 +114,10 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with LazyLogging
     if (ltPlan.isInstanceOf[Aggregate] && rtPlan.isInstanceOf[Aggregate]) {
       val leftAggr = ltPlan.asInstanceOf[Aggregate]
       val rightAggr = rtPlan.asInstanceOf[Aggregate]
-      if (checkSameRelForOptPlan(leftAggr.child, rightAggr.child)) {
+      val utils = new SparkSqlUtils()
+      if (utils.checkSameRelForOptPlan(leftAggr.child, rightAggr.child)) {
         optFlag = validateGroupingExpr(leftAggr.groupingExpressions,
           rightAggr.groupingExpressions)
-      }
-    }
-    optFlag
-  }
-
-  private def checkSameRelForOptPlan(leftPlan: LogicalPlan, rightPlan: LogicalPlan): Boolean = {
-    var optFlag = false
-    if (leftPlan.getClass.equals(rightPlan.getClass)) {
-      leftPlan match {
-        case Project(_, localRel@LocalRelation(_, _, _))
-          if rightPlan.isInstanceOf[Project]
-            && rightPlan.asInstanceOf[Project].isInstanceOf[LocalRelation] =>
-          optFlag = (localRel.schema.fieldNames.toSet
-            == rightPlan.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
-        case localRel@LocalRelation(_, _, _)
-          if rightPlan.isInstanceOf[LocalRelation] =>
-          optFlag = (localRel.schema.fieldNames.toSet
-          == rightPlan.asInstanceOf[LocalRelation].schema.fieldNames.toSet)
-        case Project(_, logRel@LogicalRelation(_, _, _, _))
-          if rightPlan.asInstanceOf[Project].child.isInstanceOf[LogicalRelation] =>
-          val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
-          val rightFiles = rightPlan.asInstanceOf[Project].child.asInstanceOf[LogicalRelation].
-            relation.asInstanceOf[HadoopFsRelation].inputFiles
-          optFlag = leftFiles.toSet == rightFiles.toSet
-        case logRel@LogicalRelation(_, _, _, _) =>
-          val leftFiles = logRel.relation.asInstanceOf[HadoopFsRelation].inputFiles
-          val rightFiles = rightPlan.asInstanceOf[LogicalRelation].
-            relation.asInstanceOf[HadoopFsRelation].inputFiles
-          optFlag = leftFiles.toSet == rightFiles.toSet
-        case Project(_, hiveRel@HiveTableRelation(_, _, _, _, _))
-          if rightPlan.isInstanceOf[Project] &&
-            rightPlan.asInstanceOf[Project].isInstanceOf[HiveTableRelation] =>
-          optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
-        case hiveRel@HiveTableRelation(_, _, _, _, _)
-          if rightPlan.isInstanceOf[HiveTableRelation] =>
-          optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
-        case Project(_, dsv2@DataSourceV2ScanRelation(_, _, _))
-          if rightPlan.isInstanceOf[Project] &&
-            rightPlan.asInstanceOf[Project].isInstanceOf[DataSourceV2ScanRelation] =>
-          optFlag = dsv2.scan ==
-            rightPlan.asInstanceOf[DataSourceV2ScanRelation].scan
-        case dsv2@DataSourceV2ScanRelation(_, _, _)
-          if rightPlan.isInstanceOf[DataSourceV2ScanRelation] =>
-          optFlag = dsv2.scan ==
-            rightPlan.asInstanceOf[DataSourceV2ScanRelation].scan
-        case _ =>
       }
     }
     optFlag
