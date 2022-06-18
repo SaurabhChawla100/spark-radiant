@@ -7,7 +7,7 @@
     <groupId>io.github.saurabhchawla100</groupId>
     <artifactId>spark-radiant</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.4-SNAPSHOT</version>
+    <version>1.0.4</version>
     <modules>
         <module>spark-radiant-common-utils/spark-radiant-common</module>
         <module>spark-radiant-common-utils/spark-radiant-common-${spark.package.version}</module>
