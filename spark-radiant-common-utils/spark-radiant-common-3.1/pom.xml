@@ -5,7 +5,7 @@
     <parent>
         <artifactId>spark-radiant</artifactId>
         <groupId>io.github.saurabhchawla100</groupId>
-        <version>1.0.4-SNAPSHOT</version>
+        <version>1.0.5-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -76,7 +76,7 @@
         <dependency>
             <groupId>io.github.saurabhchawla100</groupId>
             <artifactId>spark-radiant-common</artifactId>
-            <version>1.0.4-SNAPSHOT</version>
+            <version>1.0.5-SNAPSHOT</version>
         </dependency>
     </dependencies>
 
