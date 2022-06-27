@@ -416,4 +416,5 @@ You can raise new feature request and Bug on this [issuelink](https://github.com
 
 ### Release Notes
   
-  a) spark-radiant 1.0.3 - Please refer the docs for spark radiant [1.0.3](docs/releaseNotes/spark-radiant-1.0.3.md).
+  a) ***spark-radiant 1.0.3*** - Please refer the docs for spark radiant [1.0.3](docs/releaseNotes/spark-radiant-1.0.3.md).      
+  b) ***spark-radiant 1.0.4*** - Please refer the docs for spark radiant [1.0.4](docs/releaseNotes/spark-radiant-1.0.4.md).
