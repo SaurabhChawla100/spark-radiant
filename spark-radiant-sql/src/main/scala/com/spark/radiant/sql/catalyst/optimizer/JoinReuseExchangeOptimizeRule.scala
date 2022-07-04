@@ -196,23 +196,23 @@ object JoinReuseExchangeOptimizeRule extends Rule[LogicalPlan] with LazyLogging 
       case LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
            | HiveTableRelation(_, _, _, _, _)
-           | DataSourceV2ScanRelation(_, _, _)
            | DataSourceV2Relation(_, _, _, _, _) => true
+      case dsv2: DataSourceV2ScanRelation => true
       case Project(_, LocalRelation(_, _, _))
            | Project(_, LogicalRelation(_, _, _, _))
            | Project(_, HiveTableRelation(_, _, _, _, _))
-           | Project(_, DataSourceV2ScanRelation(_, _, _))
            | Project(_, DataSourceV2Relation(_, _, _, _, _)) => true
+      case Project(_, dsv2: DataSourceV2ScanRelation) => true
       case Project(_, Filter(_, LocalRelation(_, _, _)))
            | Project(_, Filter(_, LogicalRelation(_, _, _, _)))
            | Project(_, Filter(_, HiveTableRelation(_, _, _, _, _)))
-           | Project(_, Filter(_, DataSourceV2ScanRelation(_, _, _)))
            | Project(_, Filter(_, DataSourceV2Relation(_, _, _, _, _))) => true
+      case Project(_, Filter(_, dsv2: DataSourceV2ScanRelation)) => true
       case Filter(_, LocalRelation(_, _, _))
            | Filter(_, LogicalRelation(_, _, _, _))
            | Filter(_, HiveTableRelation(_, _, _, _, _))
-           | Filter(_, DataSourceV2ScanRelation(_, _, _))
            | Filter(_, DataSourceV2Relation(_, _, _, _, _)) => true
+      case Filter(_, dsv2: DataSourceV2ScanRelation) => true
       case _ => false
     }
   }

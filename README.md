@@ -47,7 +47,11 @@ cd spark-radiant
 
 mvn clean install -DskipTests / mvn clean package -DskipTests 
 
-For Spark-3.1.2 profile use the below command
+**For Spark-3.3.x profile use the below command for building spark-radiant**
+
+mvn clean install -DskipTests -Pspark33 / mvn clean package -DskipTests -Pspark33
+
+**For Spark-3.1.x profile use the below command for building spark-radiant**
 
 mvn clean install -DskipTests -Pspark31 / mvn clean package -DskipTests -Pspark31
 

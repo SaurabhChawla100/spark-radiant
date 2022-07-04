@@ -325,7 +325,7 @@ class SparkSqlUtils extends Serializable {
       case hiveRel@HiveTableRelation(_, _, _, _, _)
         if rightPlan.isInstanceOf[HiveTableRelation] =>
         optFlag = hiveRel.tableMeta == rightPlan.asInstanceOf[HiveTableRelation].tableMeta
-      case Project(_, Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _)))
+      case Project(_, Filter(_, dsv2: DataSourceV2ScanRelation))
         if rightPlan.isInstanceOf[Project] &&
           rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
           rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
@@ -333,20 +333,20 @@ class SparkSqlUtils extends Serializable {
         optFlag = dsv2.relation.table.name() ==
           rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
             .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
-      case Project(_, Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _)))
+      case Project(_, Filter(_, dsv2: DataSourceV2ScanRelation))
         if rightPlan.isInstanceOf[Filter] &&
           rightPlan.asInstanceOf[Filter].child
             .isInstanceOf[DataSourceV2ScanRelation] =>
         optFlag = dsv2.relation.table.name() ==
           rightPlan.asInstanceOf[Filter].child
             .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
-      case Project(_, dsv2@DataSourceV2ScanRelation(_, _, _))
+      case Project(_, dsv2: DataSourceV2ScanRelation)
         if rightPlan.isInstanceOf[Project] &&
           rightPlan.asInstanceOf[Project].child.isInstanceOf[DataSourceV2ScanRelation] =>
         optFlag = dsv2.relation.table.name() ==
           rightPlan.asInstanceOf[Project]
             .child.asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
-      case Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _))
+      case Filter(_, dsv2: DataSourceV2ScanRelation)
         if rightPlan.isInstanceOf[Project] &&
           rightPlan.asInstanceOf[Project].child.isInstanceOf[Filter] &&
           rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter]
@@ -354,13 +354,13 @@ class SparkSqlUtils extends Serializable {
         optFlag = dsv2.relation.table.name() ==
           rightPlan.asInstanceOf[Project].child.asInstanceOf[Filter].child
             .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
-      case Filter(_, dsv2@DataSourceV2ScanRelation(_, _, _))
+      case Filter(_, dsv2: DataSourceV2ScanRelation)
         if rightPlan.isInstanceOf[Filter] &&
           rightPlan.asInstanceOf[Filter].child.isInstanceOf[DataSourceV2ScanRelation] =>
         optFlag = dsv2.relation.table.name() ==
           rightPlan.asInstanceOf[Filter].child
             .asInstanceOf[DataSourceV2ScanRelation].relation.table.name()
-      case dsv2@DataSourceV2ScanRelation(_, _, _)
+      case dsv2: DataSourceV2ScanRelation
         if rightPlan.isInstanceOf[DataSourceV2ScanRelation] =>
         optFlag = dsv2.relation.table.name() ==
           rightPlan.asInstanceOf[DataSourceV2ScanRelation].relation.table.name()

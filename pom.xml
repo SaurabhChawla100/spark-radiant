@@ -168,6 +168,16 @@
         </profile>
 
         <profile>
+            <id>spark33</id>
+            <properties>
+                <spark.version>3.3.0</spark.version>
+                <spark.package.version>3.2</spark.package.version>
+                <scala.version>2.12.10</scala.version>
+                <scala.binary.version>2.12</scala.binary.version>
+            </properties>
+        </profile>
+
+        <profile>
             <id>java-11</id>
             <activation>
                 <jdk>11</jdk>

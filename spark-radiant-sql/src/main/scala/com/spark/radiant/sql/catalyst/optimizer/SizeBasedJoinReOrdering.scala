@@ -102,16 +102,16 @@ object SizeBasedJoinReOrdering extends Rule[LogicalPlan] with LazyLogging {
     plan match {
       case Project(_, Filter(_, LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
-           | HiveTableRelation(_, _, _, _, _)
-           | DataSourceV2ScanRelation(_, _, _))) => true
+           | HiveTableRelation(_, _, _, _, _))) => true
+      case Project(_, Filter(_, dsv2: DataSourceV2ScanRelation)) => true
       case Filter(_, LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
-           | HiveTableRelation(_, _, _, _, _)
-           | DataSourceV2ScanRelation(_, _, _)) => true
+           | HiveTableRelation(_, _, _, _, _)) => true
+      case Filter(_, dsv2: DataSourceV2ScanRelation) => true
       case LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
-           | HiveTableRelation(_, _, _, _, _)
-           | DataSourceV2ScanRelation(_, _, _) => true
+           | HiveTableRelation(_, _, _, _, _) => true
+      case dsv2: DataSourceV2ScanRelation => true
       case _ => false
     }
   }

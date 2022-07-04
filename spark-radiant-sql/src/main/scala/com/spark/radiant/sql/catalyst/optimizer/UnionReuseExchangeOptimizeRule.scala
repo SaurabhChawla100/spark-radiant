@@ -99,12 +99,12 @@ object UnionReuseExchangeOptimizeRule extends Rule[LogicalPlan] with LazyLogging
     plan match {
       case LocalRelation(_, _, _)
            |  LogicalRelation(_, _, _, _)
-           |  HiveTableRelation(_, _, _, _, _)
-           |  DataSourceV2ScanRelation(_, _, _) => true
+           |  HiveTableRelation(_, _, _, _, _) => true
+      case dsv2: DataSourceV2ScanRelation => true
       case Project(_, LocalRelation(_, _, _))
            |  Project(_, LogicalRelation(_, _, _, _))
-           |  Project(_, HiveTableRelation(_, _, _, _, _))
-           |  Project(_, DataSourceV2ScanRelation(_, _, _)) => true
+           |  Project(_, HiveTableRelation(_, _, _, _, _)) => true
+      case Project(_, dsv2: DataSourceV2ScanRelation) => true
       case _ => false
     }
   }
