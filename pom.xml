@@ -9,7 +9,7 @@
     <packaging>pom</packaging>
     <version>1.0.5-SNAPSHOT</version>
     <modules>
-        <module>spark-radiant-common-utils/spark-radiant-common</module>
+        <module>spark-radiant-common-utils/spark-radiant-common-util</module>
         <module>spark-radiant-common-utils/spark-radiant-common-${spark.package.version}</module>
         <module>spark-radiant-core</module>
         <module>spark-radiant-sql</module>

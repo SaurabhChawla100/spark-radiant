@@ -75,7 +75,7 @@
         </dependency>
         <dependency>
             <groupId>io.github.saurabhchawla100</groupId>
-            <artifactId>spark-radiant-common</artifactId>
+            <artifactId>spark-radiant-common-util-${spark.package.version}</artifactId>
             <version>1.0.5-SNAPSHOT</version>
         </dependency>
     </dependencies>

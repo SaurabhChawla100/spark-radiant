@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>spark-radiant-sql</artifactId>
+    <artifactId>spark-radiant-sql-${spark.package.version}</artifactId>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
