@@ -87,7 +87,7 @@ For Core Optimization (Ready for use)
 
 ### running Spark job
 
-Use latest published jar (spark-radiant-sql-1.0.4.jar, spark-radiant-core-1.0.4.jar) from maven central for running the Spark Application
+Use Latest published jar (spark-radiant-sql-1.0.4.jar, spark-radiant-core-1.0.4.jar) from maven central for running the Spark Application
 ```
 ./bin/spark-shell --packages "io.github.saurabhchawla100:spark-radiant-sql:1.0.4,io.github.saurabhchawla100:spark-radiant-core:1.0.4"
 
