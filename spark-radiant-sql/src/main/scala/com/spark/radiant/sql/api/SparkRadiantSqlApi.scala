@@ -48,6 +48,9 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
       com.spark.radiant.sql.catalyst.optimizer.DynamicFilterOptimizer
   )
 
+  private[api] val seqExtraResolutionRule: Seq[Rule[LogicalPlan]] =
+    Seq(org.apache.spark.sql.catalyst.analysis.ResolveBloomFilterHints)
+
   private[api] val seqExtraStrategy: Seq[Strategy] =
     Seq(org.apache.spark.sql.ApplyExtraSparkStrategy)
 
@@ -195,7 +198,7 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
    */
   def addOptimizerRuleInSqlExt(spark: SparkSession): Unit = {
     // Importing the extra Optimizations rule in extendedOperatorOptimizationRules
-    SparkSqlUtil.injectRule(spark, seqRule, seqExtraStrategy)
+    SparkSqlUtil.injectRule(spark, seqRule, seqExtraResolutionRule, seqExtraStrategy)
   }
 
   /**
@@ -260,6 +263,10 @@ class SparkRadiantSqlApi extends LazyLogging with Serializable {
 class SparkRadiantSqlExtension extends (SparkSessionExtensions => Unit) {
   def apply(sparkExt : SparkSessionExtensions): Unit = {
     val sqlApi = new SparkRadiantSqlApi
+    // inject the extra Resolution rule
+    sqlApi.seqExtraResolutionRule.foreach { rule =>
+      sparkExt.injectResolutionRule(_ => rule)
+    }
     // inject the extra Optimizer rule
     sqlApi.seqRule.foreach { rule =>
       sparkExt.injectOptimizerRule(_ => rule)

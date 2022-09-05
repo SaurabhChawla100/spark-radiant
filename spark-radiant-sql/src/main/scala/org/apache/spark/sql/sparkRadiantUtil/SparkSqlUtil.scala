@@ -37,7 +37,12 @@ object SparkSqlUtil {
    */
   def injectRule(sparkSession: SparkSession,
     seqRule: Seq[Rule[LogicalPlan]],
+    seqExtraResolutionRule: Seq[Rule[LogicalPlan]],
     strategy: Seq[Strategy]): Unit = {
+    // inject the extra Resolution rule
+    seqExtraResolutionRule.foreach { rule =>
+      sparkSession.extensions.injectResolutionRule(_ => rule)
+    }
     // inject the extra Optimizer rule
     seqRule.foreach { rule =>
       sparkSession.extensions.injectOptimizerRule(_ => rule)
