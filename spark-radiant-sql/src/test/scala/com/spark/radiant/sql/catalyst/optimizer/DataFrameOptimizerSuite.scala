@@ -261,6 +261,15 @@ class DataFrameOptimizerSuite extends AnyFunSuite
     filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
     assert(filter.isDefined)
     assert(df1.collect().length == 0)
+    // PERSIST_BLOOM_FILTER hints in the sql query
+    df.createOrReplaceTempView("testHint")
+    df1 = spark.sql(" select /*+ PERSIST_BLOOM_FILTER(" +
+      "'src/test/resources/BloomFilter/TestBloomFilter'," +
+      " 'test11') */ * from testHint")
+    filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    assert(filter.get.toString().contains("persist_bloom_filter_expr"))
+    assert(df1.collect().length == 1)
     deleteDir(path)
     spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text,parquet")
   }

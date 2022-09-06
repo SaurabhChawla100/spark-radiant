@@ -26,7 +26,8 @@ import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.{DataFrame, PersistBloomFilterExpr, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation,
+  DataSourceV2ScanRelation}
 
 /**
  *  add Bloom Filter Index on tables accessed by Spark
@@ -121,6 +122,12 @@ class BloomFilterIndexImpl extends LazyLogging {
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, filter)
+        case filter@Filter(_, dsV2Rel: DataSourceV2Relation) if
+          !hold
+            & dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+          hold = true
+          val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
+          Filter(bloomFilterExpression, filter)
         case filter@Filter(_, dsV2Rel: DataSourceV2ScanRelation) if
           !hold
             & dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
@@ -139,6 +146,12 @@ class BloomFilterIndexImpl extends LazyLogging {
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, hiveRel)
+        case dsV2Rel: DataSourceV2Relation if
+          !hold &
+            dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+          hold = true
+          val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
+          Filter(bloomFilterExpression, dsV2Rel)
         case dsV2Rel: DataSourceV2ScanRelation if
           !hold &
             dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
