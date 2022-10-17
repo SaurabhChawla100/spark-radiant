@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.sparkRadiantUtil.SparkSqlUtil
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.{DataFrame, PersistBloomFilterExpr, SparkSession}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project, View}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation,
   DataSourceV2ScanRelation}
@@ -112,52 +112,57 @@ class BloomFilterIndexImpl extends LazyLogging {
       val updatedPlan = newPlan.transform {
         case filter@Filter(_, rel: LogicalRelation) if
           !hold
-            & rel.relation.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+            && rel.relation.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, filter)
         case filter@Filter(_, hiveRel: HiveTableRelation) if
           !hold
-            & hiveRel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+            && hiveRel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, filter)
         case filter@Filter(_, dsV2Rel: DataSourceV2Relation) if
           !hold
-            & dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+            && dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, filter)
         case filter@Filter(_, dsV2Rel: DataSourceV2ScanRelation) if
           !hold
-            & dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+            && dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, filter)
         case rel: LogicalRelation if
-          !hold &
+          !hold &&
             rel.relation.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, rel)
         case hiveRel: HiveTableRelation if
-          !hold &
+          !hold &&
             hiveRel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, hiveRel)
         case dsV2Rel: DataSourceV2Relation if
-          !hold &
+          !hold &&
             dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, dsV2Rel)
         case dsV2Rel: DataSourceV2ScanRelation if
-          !hold &
+          !hold &&
             dsV2Rel.schema.names.count(x => attrName.contains(x)) == attrName.size =>
           hold = true
           val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
           Filter(bloomFilterExpression, dsV2Rel)
+        case view: View if
+          !hold && view.desc.schema.names.count(x => attrName.contains(x)) == attrName.size =>
+          hold = true
+          val bloomFilterExpression = PersistBloomFilterExpr(Literal(path), attrExpr)
+          Filter(bloomFilterExpression, view)
       }
       Project(oldAttr, updatedPlan)
     } else {

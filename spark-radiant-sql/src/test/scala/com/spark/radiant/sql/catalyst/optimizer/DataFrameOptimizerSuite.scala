@@ -274,6 +274,59 @@ class DataFrameOptimizerSuite extends AnyFunSuite
     spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text,parquet")
   }
 
+  test("create persist bloomFilter,save and read for FileSourceScan for multiple columns") {
+    val df = spark.read.parquet("src/test/resources/PersistBloomFilter/Testparquet")
+    val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+    val path = "src/test/resources/BloomFilter"
+    // create bloomFilter & save it as persistent bloomfilter
+    sparkRadiantSqlApi.saveBloomFilterFromDF(spark, df.filter("test11='5'"),
+      List("test11", "test12"), 1000, s"$path/TestBloomFilter")
+    // PERSIST_BLOOM_FILTER hints in the sql query
+    df.createOrReplaceTempView("testHint")
+    var df1 = spark.sql(" select /*+ PERSIST_BLOOM_FILTER(" +
+      "'src/test/resources/BloomFilter/TestBloomFilter'," +
+      " 'test11', 'test12') */ * from testHint")
+    var filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    assert(filter.get.toString().contains("persist_bloom_filter_expr"))
+    assert(df1.collect().length == 1)
+    df.createOrReplaceTempView("testHint")
+    df1 = spark.sql(" select /*+ PERSIST_BLOOM_FILTER(" +
+      "'src/test/resources/BloomFilter/TestBloomFilter'," +
+      " 'test11') */ * from testHint")
+    filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    assert(df1.collect().length == 0)
+    deleteDir(path)
+  }
+
+  test("create persist bloomFilter,save and read for dsV2 for multiple columns") {
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text")
+    val df = spark.read.parquet("src/test/resources/PersistBloomFilter/Testparquet")
+    val sparkRadiantSqlApi = new SparkRadiantSqlApi()
+    val path = "src/test/resources/BloomFilter"
+    // create bloomFilter & save it as persistent bloomfilter
+    sparkRadiantSqlApi.saveBloomFilterFromDF(spark, df.filter("test11='5'"),
+      List("test11", "test12"), 1000, s"$path/TestBloomFilter")
+    // PERSIST_BLOOM_FILTER hints in the sql query
+    df.createOrReplaceTempView("testHint")
+    var df1 = spark.sql(" select /*+ PERSIST_BLOOM_FILTER(" +
+      "'src/test/resources/BloomFilter/TestBloomFilter'," +
+      " 'test11', 'test12') */ * from testHint")
+    var filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    assert(filter.get.toString().contains("persist_bloom_filter_expr"))
+    assert(df1.collect().length == 1)
+    df.createOrReplaceTempView("testHint")
+    df1 = spark.sql(" select /*+ PERSIST_BLOOM_FILTER(" +
+      "'src/test/resources/BloomFilter/TestBloomFilter'," +
+      " 'test11') */ * from testHint")
+    filter = df1.queryExecution.optimizedPlan.find(_.isInstanceOf[Filter])
+    assert(filter.isDefined)
+    assert(df1.collect().length == 0)
+    deleteDir(path)
+    spark.sql("set spark.sql.sources.useV1SourceList=avro,csv,json,kafka,orc,text,parquet")
+  }
 }
 
 case class StructDropDup(c1: Int, c2: Int)
