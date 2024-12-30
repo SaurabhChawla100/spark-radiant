@@ -105,6 +105,9 @@ df.show
    This will provide better performance compared to pushing only one join key value to datasource as the part
    of pushed filter. The default value is true. This will be available from spark-radiant-sql 1.0.3
 
+7) **spark.sql.dynamicfilter.support.codegen** - This conf is used to genrate codegen for the bloomfilter used in Dynamic
+   Filter. The default value is false. This will be available in master branch for spark-radiant-sql.
+
 ## Running Dynamic Filter in Spark
 Provide the jar spark-radiant-sql-1.0.4.jar in the class path for the spark Application. For eg using --jars etc.
 

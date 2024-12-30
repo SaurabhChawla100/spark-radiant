@@ -19,12 +19,12 @@ package com.spark.radiant.sql.utils
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 
-import java.io.ByteArrayOutputStream
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.util.concurrent.{ExecutorService, Executors}
+import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream, Path}
-
 import org.apache.spark.util.sketch.BloomFilter
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
@@ -33,8 +33,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, Logic
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation,
-  DataSourceV2ScanRelation}
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.sources.{Filter => V2Filter}
 import org.apache.spark.sql.types.{IntegerType, LongType, ShortType}
 
@@ -87,6 +86,31 @@ class SparkSqlUtils extends Serializable {
   def newDaemonSingleThreadExecutor(threadName: String): ExecutorService = {
     val threadFactory = new ThreadFactoryBuilder().setDaemon(true).setNameFormat(threadName).build()
     Executors.newSingleThreadExecutor(threadFactory)
+  }
+
+  def serializeDynamicFilterBloomFilter(obj: BloomFilter): Array[Byte] = {
+    val out = new ByteArrayOutputStream()
+    val gzipOutputStream = new GZIPOutputStream(out)
+    obj.writeTo(gzipOutputStream)
+    gzipOutputStream.close()
+    out.close()
+    val byteArray = out.toByteArray
+    byteArray
+  }
+
+  def deserializeDynamicFilterBloomFilter(encoded: Array[Byte]): BloomFilter = {
+    val in = new ByteArrayInputStream(encoded)
+    val gzipInputStream = new GZIPInputStream(in)
+    try {
+      val bloomFilter = BloomFilter.readFrom(gzipInputStream)
+      bloomFilter
+    } catch {
+      case ex: Exception =>
+        throw ex;
+    } finally {
+      gzipInputStream.close()
+      in.close()
+    }
   }
 
   def saveBloomFilter(

@@ -19,25 +19,20 @@ package com.spark.radiant.sql.catalyst.optimizer
 
 import com.spark.radiant.sql.utils.SparkSqlUtils
 import com.typesafe.scalalogging.LazyLogging
-
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute,
-  AttributeReference, Cast, ConcatWs, EqualTo, Expression, In, Literal, Md5, Or}
-import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftAnti, LeftOuter,
-  LeftSemi, RightOuter}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, Cast, ConcatWs, EqualTo, Expression, In, Literal, Md5, Or}
+import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftAnti, LeftOuter, LeftSemi, RightOuter}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, TypedFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
 import org.apache.spark.sql.execution.columnar.InMemoryRelation
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation,
-  DataSourceV2ScanRelation}
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.orc.OrcScan
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.functions.{col, md5}
 import org.apache.spark.sql.sources.{Filter => V2Filter}
 import org.apache.spark.sql.types.{BinaryType, StringType}
-import org.apache.spark.sql.{AnalysisException, Column, CustomFilter, DataFrame,
-  Dataset, SparkSession}
+import org.apache.spark.sql.{Column, CustomFilter, DataFrame, Dataset, MightContainInBloomFilter, SparkSession}
 import org.apache.spark.util.sketch.BloomFilter
 
 private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable {
@@ -219,8 +214,19 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
         }
         leftDynamicFilterPlan = Filter(inExpr, leftDynamicFilterPlan)
       }
-      val dfl = createDfFromLogicalPlan(spark, leftDynamicFilterPlan).filter { x =>
-        broadcastValue.value.mightContain(x.getAs(bloomFilterAppendedKey))
+      val dfl = if (codegenSupportToBloomFilter()(spark)) {
+        val newdfl = createDfFromLogicalPlan(spark, leftDynamicFilterPlan)
+        val utils = new SparkSqlUtils()
+        val plan = newdfl.queryExecution.optimizedPlan
+        val rightExpression = plan.output.filter(x => x.name.contains(bloomFilterKey)).head
+        val encodedBloomFilter = utils.serializeDynamicFilterBloomFilter(bloomFilter)
+        val newPlan = CustomFilter(MightContainInBloomFilter(Literal(encodedBloomFilter),
+          rightExpression), plan)
+       createDfFromLogicalPlan(spark, newPlan)
+      } else {
+        createDfFromLogicalPlan(spark, leftDynamicFilterPlan).filter { x =>
+          broadcastValue.value.mightContain(x.getAs(bloomFilterAppendedKey))
+        }
       }
       dfl.drop(dfl(bloomFilterAppendedKey)).queryExecution.optimizedPlan
     } else {
@@ -277,6 +283,28 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
           hold = true
         }
         typeFilter
+      case customFilter: CustomFilter =>
+        val schemaStruct = customFilter.schema
+        val customFilterRef = customFilter.output.map(_.exprId)
+        val checkAttr = updatedJoinAttr.filter {
+          attr => customFilterRef.contains(attr._1.asInstanceOf[AttributeReference].exprId)
+        }
+        if (schemaStruct.fieldNames.contains(bloomFilterKeyAppender) &&
+          checkAttr.nonEmpty) {
+          // TODO add better logic for closing the recursion
+          hold = true
+        }
+        customFilter
+      // TODO Add Filter instead of CustomFilter
+      /*
+      case filter@Filter(condition, _) if !hold =>
+        val utils = new SparkSqlUtils()
+        val exprs = utils.getSplittedByAndPredicates(condition)
+        if (exprs.exists(expr => expr.isInstanceOf[MightContainInBloomFilter])) {
+          hold = true
+        }
+        filter
+       */
       case filter@Filter(_, LocalRelation(_, _, _)
            | LogicalRelation(_, _, _, _)
            | HiveTableRelation(_, _, _, _, _)
@@ -340,6 +368,12 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
   private def compareJoinSides()(implicit spark: SparkSession): Boolean = {
     spark.conf.get("spark.sql.dynamicfilter.comparejoinsides",
       spark.sparkContext.getConf.get("spark.sql.dynamicfilter.comparejoinsides",
+        "false")).toBoolean
+  }
+
+  private def codegenSupportToBloomFilter()(implicit spark: SparkSession): Boolean = {
+    spark.conf.get("spark.sql.dynamicfilter.support.codegen",
+      spark.sparkContext.getConf.get("spark.sql.dynamicfilter.support.codegen",
         "false")).toBoolean
   }
 
@@ -433,7 +467,7 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
           join
         }
     }
-    logger.debug(s"updatedPlan after applying DF : ${updatedPlan}")
+    logger.info(s"updatedPlan after applying DF : ${updatedPlan}")
     updatedPlan
   }
 
@@ -441,9 +475,12 @@ private[sql] class SparkSqlDFOptimizerRule extends LazyLogging with Serializable
     plan.transform {
       case filter: Filter =>
         val updatedFilterPlan = filter.child match {
-          case typeFilter @ TypedFilter(_, _, argsSchema, _, _)
+          case typeFilter@TypedFilter(_, _, argsSchema, _, _)
             if argsSchema.names.exists(_.contains(bloomFilterKey)) =>
             typeFilter.copy(child = Filter(filter.condition, typeFilter.child))
+          case customFilter@CustomFilter(_, _)
+            if customFilter.schema.names.exists(_.contains(bloomFilterKey)) =>
+            customFilter.copy(child = Filter(filter.condition, customFilter.child))
           case _ => filter
         }
         updatedFilterPlan
