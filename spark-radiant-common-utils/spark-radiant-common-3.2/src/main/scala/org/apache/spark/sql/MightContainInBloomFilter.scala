@@ -51,7 +51,6 @@ case class MightContainInBloomFilter(left: Expression,
       ${CodeGenerator.javaType(dataType)} ${exprCode.value} = ${CodeGenerator.defaultValue(dataType)};
       if (!${exprCode.isNull}) {
         String mightVal = ((org.apache.spark.unsafe.types.UTF8String)${mightContainValue}).toString();
-        System.out.println("value of mightVal::" + mightVal);
         ${exprCode.value} = $bloomFilter.mightContain(mightVal);
       }""")
     }
